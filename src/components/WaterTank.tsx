@@ -14,9 +14,8 @@ export function WaterTank({ records, alertThreshold = 5000, isRefreshing = false
     return records
       .filter((r) => r.payment_method === 'cash')
       .reduce((acc, r) => {
-        if (r.type === 'income') return acc + r.amount;
-        if (r.type === 'expense') return acc - r.amount;
-        return acc;
+        // 收入增加餘額，支出減少餘額
+        return r.type === 'income' ? acc + r.amount : acc - r.amount;
       }, 0);
   }, [records]);
 
