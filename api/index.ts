@@ -53,17 +53,14 @@ app.get("/api/records", async (req, res) => {
         const { data, error } = await supabase
           .from('records')
           .select('*')
-          .eq('line_user_id', user_id)
+          .eq('user_id', user_id)
           .order('created_at', { ascending: false });
 
         if (error) {
           console.error("❌ Supabase 讀取錯誤:", error.message);
         } else if (data && data.length > 0) {
           console.log(`✅ 從 Supabase 讀取到 ${data.length} 筆資料`);
-          userRecords = data.map(record => {
-            const { line_user_id, ...rest } = record;
-            return { ...rest, user_id: line_user_id } as RecordData;
-          });
+          userRecords = data as RecordData[];
           inMemoryDb = inMemoryDb.filter(r => r.user_id !== user_id).concat(userRecords);
         }
       } catch (supabaseError: any) {
@@ -107,14 +104,13 @@ app.post("/api/records", async (req, res) => {
     inMemoryDb.push(newRecord);
 
     if (supabase) {
-      const { user_id, ...rest } = newRecord;
-      const supabaseRecord = { ...rest, line_user_id: user_id };
-      console.log(`儲存記錄到 Supabase: ${description}, 金額: ${amount}`);
-      const { error } = await supabase.from('records').insert([supabaseRecord]);
+      const supabaseRecord = { ...newRecord };
+      console.log(`💾 儲存記錄到 Supabase: ${description}, 金額: ${amount}`);
+      const { data, error } = await supabase.from('records').insert([supabaseRecord]).select();
       if (error) {
-        console.error("❌ Supabase 寫入錯誤:", error.message);
+        console.error("❌ Supabase 寫入錯誤:", error.message, error);
       } else {
-        console.log('✅ Supabase 寫入成功');
+        console.log('✅ Supabase 寫入成功:', data);
       }
     }
 
@@ -136,11 +132,7 @@ app.put("/api/records/:id", async (req, res) => {
     }
 
     if (supabase) {
-      const supabaseUpdates = { ...updates } as any;
-      if (supabaseUpdates.user_id) {
-        supabaseUpdates.line_user_id = supabaseUpdates.user_id;
-        delete supabaseUpdates.user_id;
-      }
+      const supabaseUpdates = { ...updates };
       
       const { error } = await supabase
         .from('records')
@@ -206,26 +198,41 @@ app.post("/api/auth/init-history", async (req, res) => {
     inMemoryDb.push(...processedRecords);
 
     if (supabase) {
-      const supabaseRecords = processedRecords.map(r => {
-        const { user_id, ...rest } = r;
-        return { ...rest, line_user_id: user_id };
-      });
+      const supabaseRecords = processedRecords.map(r => ({ ...r }));
+      
+      console.log(`🔄 正在批次寫入 Supabase (共 ${supabaseRecords.length} 筆)...`);
       
       const BATCH_SIZE = 500;
       let totalInserted = 0;
+      let errors: any[] = [];
       
       for (let i = 0; i < supabaseRecords.length; i += BATCH_SIZE) {
         const batch = supabaseRecords.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from('records').insert(batch);
+        console.log(`處理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(supabaseRecords.length / BATCH_SIZE)}: ${batch.length} 筆`);
+        
+        const { data, error } = await supabase.from('records').insert(batch).select();
         
         if (error) {
-          console.error(`❌ 批次寫入錯誤:`, error.message);
+          console.error(`❌ 批次 ${Math.floor(i / BATCH_SIZE) + 1} 寫入錯誤:`, error.message, error);
+          errors.push(error);
         } else {
           totalInserted += batch.length;
+          console.log(`✅ 批次 ${Math.floor(i / BATCH_SIZE) + 1} 寫入成功: ${data?.length || 0} 筆`);
         }
       }
       
       console.log(`✅ 完成！成功寫入 ${totalInserted}/${processedRecords.length} 筆資料`);
+      
+      if (errors.length > 0) {
+        console.error(`⚠️ 共 ${errors.length} 個批次發生錯誤`);
+        return res.status(207).json({ 
+          success: true, 
+          count: totalInserted,
+          total: processedRecords.length,
+          errors: errors.map(e => e.message),
+          message: `部分成功：${totalInserted}/${processedRecords.length} 筆已儲存`
+        });
+      }
     }
 
     res.status(201).json({ success: true, count: processedRecords.length });
