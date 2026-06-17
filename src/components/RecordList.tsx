@@ -92,58 +92,55 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
 
       <div className="flex-1 overflow-y-auto px-6 py-6 scroll-smooth">
         <div className="relative border-l border-[#4a4a4a]/10 ml-4 md:ml-6 pb-12 flex flex-col gap-6">
-          {filtered.slice(0, 100).map((r, i) => {
-            
-            // Render day separator logic
-            let showDateHeader = false;
-            if (i === 0) showDateHeader = true;
-            else if (!isSameDay(safeParseDate(r.created_at), safeParseDate(filtered[i - 1].created_at))) {
-              showDateHeader = true;
-            }
+          {/* 當處於編輯模式時，只顯示正在編輯的帳目 */}
+          {editId ? (
+            filtered.filter(r => r.id === editId).map((r) => (
+              <div key={r.id} className="relative w-full">
+                 <div className="absolute -left-[45px] md:-left-[53px] top-6 w-6 h-6 rounded-full bg-white border border-[#4a4a4a]/20 flex items-center justify-center z-10 shadow-sm">
+                    <Pen className="w-3 h-3 text-[#4a4a4a] opacity-50" />
+                 </div>
+                 <div className="bg-white/80 backdrop-blur-xl border border-[#4a4a4a]/20 p-5 rounded-2xl shadow-lg ml-6 relative z-10 flex flex-col gap-4">
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                       <div className="flex-1 flex flex-col gap-1">
+                         <label className="text-[9px] uppercase tracking-widest opacity-40">Date & Time</label>
+                         <input type="datetime-local" value={editDate} onChange={e => setEditDate(e.target.value)} className="text-xs p-2.5 border border-[#4a4a4a]/20 rounded-xl bg-transparent focus:outline-none focus:border-[#4a4a4a] transition-colors" />
+                       </div>
+                       <div className="flex-[2] flex flex-col gap-1">
+                         <label className="text-[9px] uppercase tracking-widest opacity-40">Description</label>
+                         <input autoFocus type="text" value={editDesc} onChange={e => setEditDesc(e.target.value)} className="text-sm border-b border-[#4a4a4a]/20 p-2.5 bg-transparent focus:outline-none focus:border-[#4a4a4a] transition-colors placeholder:opacity-30" placeholder="補記帳目..."/>
+                       </div>
+                       <div className="flex-1 flex flex-col gap-1">
+                         <label className="text-[9px] uppercase tracking-widest opacity-40">Amount</label>
+                         <input type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} className="text-sm border-b border-[#4a4a4a]/20 p-2.5 bg-transparent font-serif focus:outline-none focus:border-[#4a4a4a] transition-colors" />
+                       </div>
+                    </div>
 
-            if (editId === r.id) {
-              // INLINE EDIT MODE CARD
-              return (
-                <div key={r.id} className="relative w-full">
-                   {showDateHeader && <DateHeader date={r.created_at} />}
-                   <div className="absolute -left-[45px] md:-left-[53px] top-6 w-6 h-6 rounded-full bg-white border border-[#4a4a4a]/20 flex items-center justify-center z-10 shadow-sm">
-                      <Pen className="w-3 h-3 text-[#4a4a4a] opacity-50" />
-                   </div>
-                   <div className="bg-white/80 backdrop-blur-xl border border-[#4a4a4a]/20 p-5 rounded-2xl shadow-lg ml-6 relative z-10 flex flex-col gap-4">
-                      
-                      <div className="flex flex-col sm:flex-row gap-3">
-                         <div className="flex-1 flex flex-col gap-1">
-                           <label className="text-[9px] uppercase tracking-widest opacity-40">Date & Time</label>
-                           <input type="datetime-local" value={editDate} onChange={e => setEditDate(e.target.value)} className="text-xs p-2.5 border border-[#4a4a4a]/20 rounded-xl bg-transparent focus:outline-none focus:border-[#4a4a4a] transition-colors" />
-                         </div>
-                         <div className="flex-[2] flex flex-col gap-1">
-                           <label className="text-[9px] uppercase tracking-widest opacity-40">Description</label>
-                           <input autoFocus type="text" value={editDesc} onChange={e => setEditDesc(e.target.value)} className="text-sm border-b border-[#4a4a4a]/20 p-2.5 bg-transparent focus:outline-none focus:border-[#4a4a4a] transition-colors placeholder:opacity-30" placeholder="補記帳目..."/>
-                         </div>
-                         <div className="flex-1 flex flex-col gap-1">
-                           <label className="text-[9px] uppercase tracking-widest opacity-40">Amount</label>
-                           <input type="number" value={editAmount} onChange={e => setEditAmount(Number(e.target.value))} className="text-sm border-b border-[#4a4a4a]/20 p-2.5 bg-transparent font-serif focus:outline-none focus:border-[#4a4a4a] transition-colors" />
-                         </div>
-                      </div>
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-2">
+                       <div className="flex gap-2">
+                         <button onClick={() => setEditMethod('cash')} className={cn("px-4 py-1.5 rounded-full text-[9px] uppercase tracking-widest flex items-center gap-1 border transition-colors", editMethod === 'cash' ? "bg-[#bccad6] border-transparent text-[#4a4a4a]" : "bg-transparent border-[#4a4a4a]/20 opacity-50")}><Banknote className="w-3 h-3"/> Cash</button>
+                         <button onClick={() => setEditMethod('credit_card')} className={cn("px-4 py-1.5 rounded-full text-[9px] uppercase tracking-widest flex items-center gap-1 border transition-colors", editMethod === 'credit_card' ? "bg-[#d6adad] border-transparent text-[#4a4a4a]" : "bg-transparent border-[#4a4a4a]/20 opacity-50")}><CreditCard className="w-3 h-3"/> Credit</button>
+                       </div>
+                       
+                       <div className="flex gap-2 w-full sm:w-auto">
+                         <button onClick={cancelEdit} className="flex-1 sm:flex-none px-6 py-2 text-[10px] uppercase font-medium bg-[#4a4a4a]/5 hover:bg-[#4a4a4a]/10 text-[#4a4a4a] rounded-full transition-colors flex justify-center items-center gap-1"><X className="w-3 h-3"/> Cancel</button>
+                         <button onClick={() => saveEdit(r)} className="flex-1 sm:flex-none px-6 py-2 text-[10px] uppercase font-medium bg-[#4a4a4a] text-[#f5f2ed] rounded-full hover:bg-[#333] shadow-md transition-all flex justify-center items-center gap-1"><Check className="w-3 h-3"/> Save</button>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+            ))
+          ) : (
+            /* 非編輯模式：顯示所有帳目 */
+            filtered.slice(0, 100).map((r, i) => {
+              // Render day separator logic
+              let showDateHeader = false;
+              if (i === 0) showDateHeader = true;
+              else if (!isSameDay(safeParseDate(r.created_at), safeParseDate(filtered[i - 1].created_at))) {
+                showDateHeader = true;
+              }
 
-                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-2">
-                         <div className="flex gap-2">
-                           <button onClick={() => setEditMethod('cash')} className={cn("px-4 py-1.5 rounded-full text-[9px] uppercase tracking-widest flex items-center gap-1 border transition-colors", editMethod === 'cash' ? "bg-[#bccad6] border-transparent text-[#4a4a4a]" : "bg-transparent border-[#4a4a4a]/20 opacity-50")}><Banknote className="w-3 h-3"/> Cash</button>
-                           <button onClick={() => setEditMethod('credit_card')} className={cn("px-4 py-1.5 rounded-full text-[9px] uppercase tracking-widest flex items-center gap-1 border transition-colors", editMethod === 'credit_card' ? "bg-[#d6adad] border-transparent text-[#4a4a4a]" : "bg-transparent border-[#4a4a4a]/20 opacity-50")}><CreditCard className="w-3 h-3"/> Credit</button>
-                         </div>
-                         
-                         <div className="flex gap-2 w-full sm:w-auto">
-                           <button onClick={cancelEdit} className="flex-1 sm:flex-none px-6 py-2 text-[10px] uppercase font-medium bg-[#4a4a4a]/5 hover:bg-[#4a4a4a]/10 text-[#4a4a4a] rounded-full transition-colors flex justify-center items-center gap-1"><X className="w-3 h-3"/> Cancel</button>
-                           <button onClick={() => saveEdit(r)} className="flex-1 sm:flex-none px-6 py-2 text-[10px] uppercase font-medium bg-[#4a4a4a] text-[#f5f2ed] rounded-full hover:bg-[#333] shadow-md transition-all flex justify-center items-center gap-1"><Check className="w-3 h-3"/> Save</button>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-              );
-            }
-
-            // TIMELINE CARD
-            const isUrgent = r.is_urgent || (!r.is_urgent && r.description === '未命名急件');
+              const isUrgent = r.is_urgent || (!r.is_urgent && r.description === '未命名急件');
 
             return (
               <div key={r.id} className="relative w-full group">
@@ -203,8 +200,9 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                 </div>
               </div>
             );
-          })}
-          {filtered.length === 0 && (
+            })
+          )}
+          {!editId && filtered.length === 0 && (
             <div className="ml-6 py-12 text-center">
                <p className="font-serif italic opacity-40 text-sm">水枯石爛，尚無痕跡...</p>
             </div>
