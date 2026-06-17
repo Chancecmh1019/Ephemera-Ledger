@@ -110,7 +110,7 @@ function MainApp() {
     setIsRefreshing(true);
     const newRecord: RecordData = {
       id: crypto.randomUUID(),
-      line_user_id: user.id,
+      user_id: user.id,
       amount,
       payment_method: paymentMethod,
       type,
