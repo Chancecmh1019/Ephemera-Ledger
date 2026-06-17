@@ -4,13 +4,19 @@ import { Banknote, CreditCard, CalendarDays, Edit3, X, Check } from 'lucide-reac
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 
+function getLocalCurrentTime() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+}
+
 interface FluidSliderProps {
   onRecord: (amount: number, method: 'cash'|'credit_card', type: 'income'|'expense', desc: string, date?: string) => void;
 }
 
 export function FluidSlider({ onRecord }: FluidSliderProps) {
   const [amount, setAmount] = useState(0);
-  const [date, setDate] = useState<string>(''); // empty = now
+  const [date, setDate] = useState<string>(getLocalCurrentTime());
   const [isDragging, setIsDragging] = useState(false);
   
   // Directions: 0 = neutral, -1 = left (cash), 1 = right (credit)
@@ -75,7 +81,7 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
       if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
       
       setAmount(0);
-      setDate('');
+      setDate(getLocalCurrentTime());
     }
     setActionDir(0);
   };
@@ -90,7 +96,7 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
     onRecord(amount, manualMethod, manualType, manualDesc || '精確記帳', safeISODate);
     setIsManualMode(false);
     setAmount(0);
-    setDate('');
+    setDate(getLocalCurrentTime());
     setManualDesc('');
   };
 
@@ -220,7 +226,7 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
              value={amount === 0 ? '' : amount}
              onChange={(e) => setAmount(Number(e.target.value))}
              placeholder="0"
-             className={cn("bg-transparent outline-none text-center font-serif text-5xl sm:text-6xl tracking-tighter transition-colors duration-300 w-[120px]", 
+             className={cn("bg-transparent outline-none text-center font-serif text-5xl sm:text-6xl tracking-tighter transition-colors duration-300 w-full px-4", 
                 amount === 0 ? "text-[#4a4a4a]/40" : 
                 actionDir === -1 ? "text-[#7a90a3]" : 
                 actionDir === 1 ? "text-[#b08b8b]" : "text-[#4a4a4a]"
