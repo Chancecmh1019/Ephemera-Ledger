@@ -45,7 +45,7 @@ export function ActivityGrid({ records }: { records: RecordData[] }) {
              {days.map((d, i) => (
                 <div 
                   key={i} 
-                  title={`${format(d, 'MM/dd')}: ${d.count} 筆留痕`}
+                  title={`${format(d.date, 'MM/dd')}: ${d.count} 筆留痕`}
                   className={cn(
                     "w-[16px] h-[16px] rounded-[4px] transition-all duration-300 hover:scale-110",
                     d.level === 0 && "bg-white/40 border border-white/40",
