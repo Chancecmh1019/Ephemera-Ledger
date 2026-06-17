@@ -65,7 +65,7 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
   };
 
   return (
-    <div className="w-full h-[280px] sm:h-[320px] bg-white/40 backdrop-blur-xl border border-white/60 rounded-[40px] relative overflow-hidden flex flex-col items-center justify-center shadow-lg group">
+    <div className="w-full h-[280px] sm:h-[320px] lg:h-full min-h-[300px] bg-white/40 backdrop-blur-xl border border-white/60 rounded-[40px] relative overflow-hidden flex flex-col items-center justify-center shadow-lg group">
       
       {/* Background active indicators based on actionDir */}
       <div className={cn("absolute inset-0 bg-[#bccad6]/20 transition-opacity duration-500", actionDir === -1 ? "opacity-100" : "opacity-0")} />
