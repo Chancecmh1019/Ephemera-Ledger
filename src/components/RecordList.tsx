@@ -160,13 +160,14 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
 
             return (
               <div key={r.id} className="relative w-full group">
-                {showDateHeader && <DateHeader date={r.created_at} />}
-                
-                {/* Timeline Dot */}
+                {/* Timeline Dot - 放在日期標題之前，這樣點點會對應到帳目而非日期 */}
                 <div className={cn(
-                  "absolute -left-[9px] top-6 w-5 h-5 rounded-full border-[3px] border-[#f5f2ed] shadow-md z-10 transition-transform group-hover:scale-125",
+                  "absolute -left-[9px] w-5 h-5 rounded-full border-[3px] border-[#f5f2ed] shadow-md z-10 transition-transform group-hover:scale-125",
+                  showDateHeader ? "top-[52px]" : "top-6",
                   r.payment_method === 'cash' ? "bg-[#bccad6]" : "bg-[#d6adad]"
                 )}></div>
+                
+                {showDateHeader && <DateHeader date={r.created_at} />}
                 
                 {/* Card */}
                 <div 
@@ -240,7 +241,7 @@ function DateHeader({ date }: { date: string }) {
   return (
     <div className="mt-6 mb-4 ml-6 flex items-center gap-4 z-10 w-fit">
        <div className="bg-[#4a4a4a] text-[#f5f2ed] px-3 py-1 rounded-lg text-[9px] uppercase tracking-widest font-sans font-medium shadow-md">
-         {format(safeParseDate(date), 'MMM d', { locale: zhTW })}
+         {format(safeParseDate(date), 'yyyy年MM月dd日', { locale: zhTW })}
        </div>
        <div className="h-px flex-1 bg-[#4a4a4a]/10 max-w-[100px]"></div>
     </div>
