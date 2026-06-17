@@ -1,255 +1,412 @@
-import express from "express";
-import path from "path";
-import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
-import { createClient } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback } from 'react';
+import { RecordData, User } from './types';
+import { WaterTank } from './components/WaterTank';
+import { LedgerChart } from './components/LedgerChart';
+import { FluidSlider } from './components/FluidSlider';
+import { RecordList } from './components/RecordList';
+import { BalanceRings } from './components/BalanceRings';
+import { ActivityGrid } from './components/ActivityGrid';
+import { Leaf, Loader2, LayoutGrid, Clock, Plus, BarChart } from 'lucide-react';
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { cn } from './lib/utils';
 
-const app = express();
-app.use(express.json({ limit: '50mb' }));
+export default function App() {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
-export interface RecordData {
-  id: string;
-  user_id: string;
-  type: string;
-  amount: number;
-  description: string;
-  note: string;
-  payment_method: string;
-  created_at: string;
-  is_urgent?: boolean;
+  if (clientId) {
+    return (
+      <GoogleOAuthProvider clientId={clientId}>
+        <BrowserRouter>
+          <MainApp />
+        </BrowserRouter>
+      </GoogleOAuthProvider>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      <MainApp />
+    </BrowserRouter>
+  );
 }
 
-let inMemoryDb: RecordData[] = [];
+function MainApp() {
+  const location = useLocation();
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('ephemera_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [records, setRecords] = useState<RecordData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importStr, setImportStr] = useState('');
+  const [importing, setImporting] = useState(false);
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_KEY || '';
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-if (!supabase) {
-  console.warn('⚠️ Supabase 未設定！資料將僅儲存在記憶體中。');
-  console.warn('請在 .env 檔案中設定 SUPABASE_URL 和 SUPABASE_KEY');
-} else {
-  console.log('✅ Supabase 客戶端已初始化');
-}
-
-app.get("/api/records", async (req, res) => {
-  try {
-    const { user_id } = req.query;
-    if (!user_id || typeof user_id !== 'string') {
-      return res.status(400).json({ error: "user_id is required" });
-    }
-
-    let userRecords = inMemoryDb.filter(r => r.user_id === user_id);
-
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('records')
-        .select('*')
-        .eq('line_user_id', user_id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("Supabase read error, falling back to memory:", error.message);
-      } else if (data && data.length > 0) {
-        userRecords = data.map(record => {
-          const { line_user_id, ...rest } = record;
-          return { ...rest, user_id: line_user_id } as RecordData;
-        });
-        inMemoryDb = inMemoryDb.filter(r => r.user_id !== user_id).concat(userRecords);
-      }
-    }
-
-    userRecords.sort((a, b) => {
-      const db = new Date(b.created_at).getTime();
-      const da = new Date(a.created_at).getTime();
-      return (db || 0) - (da || 0);
-    });
-    res.json(userRecords);
-  } catch (err: any) {
-    console.error("GET /api/records unhandled error:", err.message);
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-});
-
-app.post("/api/records", async (req, res) => {
-  try {
-    const { user_id, type, amount, description, payment_method, created_at, id, is_urgent, note } = req.body;
-    if (!user_id || !type || amount == null || !description || !payment_method) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    const newRecord: RecordData = {
-      id: id || crypto.randomUUID(),
-      user_id: user_id,
-      type,
-      amount: Number(amount),
-      description,
-      note: note || "",
-      payment_method,
-      created_at: created_at || new Date().toISOString(),
-      is_urgent: is_urgent || false
-    };
-
-    inMemoryDb.push(newRecord);
-
-    if (supabase) {
-      const { user_id, ...rest } = newRecord;
-      const supabaseRecord = { ...rest, line_user_id: user_id };
-      console.log(`儲存記錄到 Supabase: ${description}, 金額: ${amount}`);
-      const { error } = await supabase.from('records').insert([supabaseRecord]);
-      if (error) {
-        console.error("❌ Supabase 寫入錯誤:", error.message, error);
-        // 仍然回傳成功，因為已儲存到記憶體
-      } else {
-        console.log('✅ Supabase 寫入成功');
-      }
-    } else {
-      console.warn('⚠️ Supabase 未設定，僅儲存到記憶體');
-    }
-
-    res.status(201).json(newRecord);
-  } catch (err: any) {
-    console.error("POST /api/records unhandled error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put("/api/records/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body; 
+  const fetchRecords = useCallback(async (userId: string, background = false) => {
+    if (!background) setLoading(true);
+    else setIsRefreshing(true);
     
-    const index = inMemoryDb.findIndex(r => r.id === id);
-    if (index !== -1) {
-      inMemoryDb[index] = { ...inMemoryDb[index], ...updates };
+    try {
+      const res = await fetch(`/api/records?user_id=${userId}`);
+      if (!res.ok) {
+        // Fallback to localStorage for static deployments (Vercel)
+        const localData = localStorage.getItem(`ephemera_records_${userId}`);
+        if (localData) {
+           const parsed = JSON.parse(localData);
+           setRecords(parsed);
+           if (parsed.length === 0 && !background) setShowImportModal(true);
+        } else {
+           if (!background) setShowImportModal(true);
+        }
+        return;
+      }
+      const data = await res.json();
+      setRecords(data);
+      localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(data));
+      
+      if (data.length === 0 && !background) {
+        setShowImportModal(true);
+      }
+    } catch (e) {
+      console.error(e);
+      // Fallback
+      const localData = localStorage.getItem(`ephemera_records_${userId}`);
+      if (localData) setRecords(JSON.parse(localData));
+    } finally {
+      setLoading(false);
+      setTimeout(() => setIsRefreshing(false), 800);
     }
+  }, []);
 
-    if (supabase) {
-      const supabaseUpdates = { ...updates } as any;
-      if (supabaseUpdates.user_id) {
-        supabaseUpdates.line_user_id = supabaseUpdates.user_id;
-        delete supabaseUpdates.user_id;
+  useEffect(() => {
+    if (user) {
+      fetchRecords(user.id);
+
+      const focusHandler = () => {
+        console.log("Window focused, refreshing data...");
+        fetchRecords(user.id, true);
+      };
+      window.addEventListener('focus', focusHandler);
+      
+      const interval = setInterval(() => {
+        fetchRecords(user.id, true);
+      }, 60000);
+
+      return () => {
+        window.removeEventListener('focus', focusHandler);
+        clearInterval(interval);
+      };
+    } else {
+      setRecords([]);
+      setLoading(false);
+    }
+  }, [user, fetchRecords]);
+
+  const handleRecord = async (amount: number, paymentMethod: 'cash'|'credit_card', type: 'income'|'expense', description: string, customDate?: string) => {
+    if (!user) return;
+    
+    setIsRefreshing(true);
+    const newRecord: RecordData = {
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      amount,
+      payment_method: paymentMethod,
+      type,
+      description,
+      note: '',
+      created_at: customDate || new Date().toISOString(),
+      is_urgent: description === '未命名急件'
+    };
+    
+    // 先更新本地狀態，提供即時反饋
+    setRecords(prev => {
+        const arr = [newRecord, ...prev];
+        const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
+        return sorted;
+    });
+
+    try {
+      const res = await fetch('/api/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRecord)
+      });
+      
+      if (res.ok) {
+        console.log('記錄已成功儲存到雲端');
+        fetchRecords(user.id, true);
+      } else {
+        const errorText = await res.text();
+        console.error('儲存到雲端失敗:', errorText);
+      }
+    } catch (e) {
+      console.error("無法連線到伺服器，僅儲存到本地端", e);
+    }
+  };
+
+  const handleUpdate = async (updatedRecord: RecordData) => {
+    if (!user) return;
+    setIsRefreshing(true);
+    setRecords(prev => {
+        const arr = prev.map(r => r.id === updatedRecord.id ? updatedRecord : r);
+        const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
+        return sorted;
+    });
+    
+    try {
+      const res = await fetch(`/api/records/${updatedRecord.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedRecord)
+      });
+      if (res.ok) fetchRecords(user.id, true);
+    } catch (e) {
+      console.error("Update to cloud failed", e);
+    }
+  };
+
+  const handleHistoricalImport = async () => {
+    if (!user || !importStr) return;
+    try {
+      setImporting(true);
+      const parsed = JSON.parse(importStr);
+      
+      console.log(`準備匯入 ${parsed.length} 筆歷史資料...`);
+      
+      // 確保每筆資料都有必要的欄位和正確的 ID
+      const processedRecords = parsed.map((r: any) => ({
+        id: r.id || crypto.randomUUID(),
+        user_id: user.id,
+        type: r.type || 'expense',
+        amount: Number(r.amount) || 0,
+        description: r.description || '歷史紀錄',
+        note: r.note || '',
+        payment_method: r.payment_method || 'cash',
+        created_at: r.created_at || new Date().toISOString(),
+        is_urgent: false
+      }));
+      
+      const res = await fetch('/api/auth/init-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, records: processedRecords })
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('伺服器回應錯誤:', errorText);
+        // static deploy fallback
+        const currentData = localStorage.getItem(`ephemera_records_${user.id}`);
+        const currentRecords = currentData ? JSON.parse(currentData) : [];
+        const merged = [...currentRecords, ...processedRecords].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(merged));
+        setRecords(merged);
+        alert(`已儲存 ${processedRecords.length} 筆資料到本地端（伺服器連線失敗）`);
+      } else {
+        const result = await res.json();
+        console.log('匯入成功:', result);
+        alert(`成功匯入 ${processedRecords.length} 筆歷史資料！`);
+        fetchRecords(user.id);
       }
       
-      const { error } = await supabase
-        .from('records')
-        .update(supabaseUpdates)
-        .eq('id', id);
-
-      if (error) {
-        console.error("Supabase update error:", error.message);
-      }
+      setShowImportModal(false);
+    } catch (e) {
+      console.error('匯入錯誤詳情:', e);
+      alert(`匯入失敗: ${e instanceof Error ? e.message : '未知錯誤'}`);
+    } finally {
+      setImporting(false);
     }
-    
-    res.json({ success: true, updated: inMemoryDb.find(r => r.id === id) });
-  } catch (err: any) {
-    console.error("PUT /api/records unhandled error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  };
 
-app.delete("/api/records/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    inMemoryDb = inMemoryDb.filter(r => r.id !== id);
-
-    if (supabase) {
-      const { error } = await supabase
-        .from('records')
-        .delete()
-        .eq('id', id);
-        
-      if (error) {
-        console.error("Supabase delete error:", error.message);
-      }
-    }
-
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("DELETE unhandled error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post("/api/auth/init-history", async (req, res) => {
-  try {
-    const { user_id, records } = req.body;
-    if (!user_id || !Array.isArray(records)) {
-      return res.status(400).json({ error: "user_id and records array are required" });
-    }
-
-    console.log(`🔄 開始匯入歷史資料: 使用者 ${user_id}, 共 ${records.length} 筆記錄`);
-
-    const processedRecords: RecordData[] = records.map(r => ({
-      id: r.id || crypto.randomUUID(),
-      user_id: user_id,
-      type: r.type || 'expense',
-      amount: Number(r.amount) || 0,
-      description: r.description || '歷史紀錄匯入',
-      note: r.note || "",
-      payment_method: r.payment_method || 'cash',
-      created_at: r.created_at || new Date().toISOString(),
-      is_urgent: false
-    }));
-
-    inMemoryDb.push(...processedRecords);
-    console.log(`✅ 已將 ${processedRecords.length} 筆資料加入記憶體`);
-
-    if (supabase) {
-      const supabaseRecords = processedRecords.map(r => {
-        const { user_id, ...rest } = r;
-        return {
-          ...rest,
-          line_user_id: user_id
-        };
+  const handleLoginSuccess = async (tokenResponse: any) => {
+    try {
+      const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
       });
-      console.log(`🔄 正在批次寫入 Supabase...`);
-      const { error, data } = await supabase.from('records').insert(supabaseRecords);
-      if (error) {
-        console.error("❌ Supabase 批次寫入錯誤:", error.message, error);
-        return res.status(500).json({ 
-          error: "Supabase insert failed", 
-          details: error.message,
-          memoryCount: processedRecords.length 
-        });
-      } else {
-        console.log(`✅ 成功批次寫入 ${processedRecords.length} 筆資料到 Supabase`);
-      }
-    } else {
-      console.warn('⚠️ Supabase 未設定，資料僅儲存在記憶體中');
+      const userInfo = await userInfoRes.json();
+      
+      const userObj: User = { 
+        id: `google-${userInfo.sub}`, 
+        name: userInfo.name || '時光旅人',
+        email: userInfo.email,
+        picture: userInfo.picture
+      };
+      
+      setUser(userObj);
+      localStorage.setItem('ephemera_user', JSON.stringify(userObj));
+    } catch (e) {
+      console.error("Login verification failed", e);
     }
+  };
 
-    res.status(201).json({ success: true, count: processedRecords.length });
-  } catch (err: any) {
-    console.error("❌ POST /api/auth/init-history 錯誤:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-export const apiApp = app;
-
-async function startServer() {
-  const PORT = 3000;
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  const login = useGoogleLogin({
+    onSuccess: handleLoginSuccess,
+    onError: () => console.error('Login Failed'),
   });
-}
 
-if (!process.env.VERCEL) {
-  startServer();
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('ephemera_user');
+  };
+
+  if (loading && !records.length && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f2ed] text-[#4a4a4a]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin opacity-50" />
+          <p className="text-xs font-serif tracking-widest opacity-60">聯結流淌的時光...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-4 sm:p-6 text-center bg-[#f5f2ed] relative overflow-hidden">
+        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-white/50 backdrop-blur-xl rounded-full flex items-center justify-center shadow-lg border border-white/60 mb-6 sm:mb-8 relative z-10 transition-transform hover:scale-105">
+          <Leaf className="w-10 h-10 sm:w-12 sm:h-12 text-[#bccad6]" strokeWidth={1} />
+        </div>
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif tracking-widest text-[#4a4a4a] mb-2 sm:mb-3 relative z-10">浮生誌</h1>
+        <p className="text-xs sm:text-sm text-[#4a4a4a] opacity-50 tracking-widest mb-10 sm:mb-16 relative z-10 font-serif">歲月留痕 · Ephemera Ledger</p>
+        
+        <div className="relative z-10 flex flex-col items-center gap-4 w-full max-w-[280px] sm:max-w-[320px]">
+          <button 
+            onClick={() => login()}
+            className="w-full bg-white/60 backdrop-blur-md text-[#4a4a4a] border border-[#bccad6]/50 px-6 py-3.5 sm:px-10 sm:py-4 rounded-full text-[11px] sm:text-xs tracking-widest font-sans flex items-center justify-center gap-3 hover:bg-white/90 hover:shadow-lg transition-all duration-300"
+          >
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4 sm:w-5 sm:h-5" />
+            以 Google 登入開始留痕
+          </button>
+          
+          <p className="text-[9px] sm:text-[10px] text-[#4a4a4a] opacity-40 font-sans tracking-wide leading-relaxed">
+            ※ 若點擊無反應，可能是您的瀏覽器阻擋了彈窗。<br/>請複製網址並使用 Safari 或 Chrome 重新開啟。
+          </p>
+        </div>
+        
+        <div className="absolute top-[10%] left-[-20%] sm:left-[-10%] w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-[#bccad6] rounded-full blur-[80px] sm:blur-[120px] opacity-40 pointer-events-none"></div>
+        <div className="absolute bottom-[5%] right-[-20%] sm:right-[-10%] w-[250px] sm:w-[400px] h-[250px] sm:h-[400px] bg-[#d6adad] rounded-full blur-[80px] sm:blur-[120px] opacity-30 pointer-events-none"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full pb-32 pt-8 px-4 sm:px-6 lg:p-8 relative overflow-x-hidden flex flex-col bg-[#f5f2ed] text-[#4a4a4a] font-sans selection:bg-[#bccad6]/30">
+      <div className="absolute top-[-100px] left-[-100px] w-[500px] h-[500px] bg-[#bccad6] rounded-full blur-[120px] opacity-30 pointer-events-none transition-all duration-1000"></div>
+      <div className="absolute bottom-[-100px] right-[-100px] w-[500px] h-[500px] bg-[#d6adad] rounded-full blur-[120px] opacity-20 pointer-events-none transition-all duration-1000"></div>
+
+      <div className="w-full max-w-[1400px] mx-auto flex flex-col h-full relative z-10">
+        <div className="w-full flex justify-between items-center mb-8 px-2 md:px-0">
+          <div className="flex items-center gap-3 text-[#4a4a4a]">
+            <Leaf className="w-6 h-6 opacity-80" strokeWidth={1.5} />
+            <h1 className="font-serif tracking-widest text-xl flex items-baseline gap-3">
+              浮生誌 
+              <span className="text-[9px] opacity-40 uppercase tracking-[0.3em] font-sans">Ephemera</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-3 bg-white/40 border border-white/60 backdrop-blur-md pl-4 pr-1.5 py-1.5 rounded-full shadow-sm hover:bg-white/60 transition-colors">
+            <div className="flex flex-col items-end mr-1">
+               <span className="text-xs font-serif italic text-[#4a4a4a]">{user.name}</span>
+               <button onClick={logout} className="text-[9px] opacity-40 hover:opacity-80 uppercase tracking-widest transition-opacity mt-0.5">
+                 登出 Logout
+               </button>
+            </div>
+            {user.picture ? (
+               <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full border border-white/80 shadow-sm" />
+            ) : (
+               <div className="w-8 h-8 rounded-full bg-[#bccad6]/30 flex items-center justify-center border border-white/80">
+                 <span className="text-xs font-serif">{user.name.charAt(0)}</span>
+               </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 w-full relative flex flex-col">
+          <Routes>
+             <Route path="/" element={
+               <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 w-full">
+                 <div className="flex-none lg:flex-1 w-full flex flex-col gap-6 lg:gap-8 h-[380px] sm:h-[400px] lg:h-auto">
+                   <FluidSlider onRecord={handleRecord} />
+                 </div>
+                 <div className="flex-none lg:flex-[1.2] w-full flex flex-col gap-6 lg:gap-8 h-[400px] lg:h-auto lg:min-h-0">
+                   <WaterTank records={records} alertThreshold={3000} isRefreshing={isRefreshing} />
+                 </div>
+               </div>
+             } />
+             <Route path="/dashboard" element={
+               <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 lg:gap-8 flex-1 w-full">
+                 <div className="flex flex-col gap-6 lg:gap-8">
+                   <BalanceRings records={records} />
+                   <ActivityGrid records={records} />
+                 </div>
+                 <div className="flex flex-col gap-6 lg:gap-8 min-h-[300px] lg:min-h-0">
+                   <LedgerChart records={records} />
+                 </div>
+               </div>
+             } />
+             <Route path="/history" element={
+               <div className="flex-1 w-full flex flex-col">
+                 <RecordList records={records} onUpdate={handleUpdate} />
+               </div>
+             } />
+          </Routes>
+        </div>
+      </div>
+
+      {/* Floating Bottom Navigation for Multi-page Structure */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+         <div className="flex items-center gap-2 bg-white/70 backdrop-blur-2xl border border-white/80 p-2 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.1)]">
+            <Link to="/" className={cn("px-6 py-3 rounded-full flex flex-col items-center gap-1 transition-all duration-300", location.pathname === '/' ? "bg-[#4a4a4a] text-[#f5f2ed] shadow-md scale-105" : "text-[#4a4a4a]/50 hover:text-[#4a4a4a] hover:bg-white/50")}>
+               <Plus className="w-5 h-5" strokeWidth={1.5} />
+               <span className="text-[9px] font-sans tracking-widest uppercase">盲記</span>
+            </Link>
+            <Link to="/dashboard" className={cn("px-6 py-3 rounded-full flex flex-col items-center gap-1 transition-all duration-300", location.pathname === '/dashboard' ? "bg-[#4a4a4a] text-[#f5f2ed] shadow-md scale-105" : "text-[#4a4a4a]/50 hover:text-[#4a4a4a] hover:bg-white/50")}>
+               <BarChart className="w-5 h-5" strokeWidth={1.5} />
+               <span className="text-[9px] font-sans tracking-widest uppercase">圖表</span>
+            </Link>
+            <Link to="/history" className={cn("px-6 py-3 rounded-full flex flex-col items-center gap-1 transition-all duration-300", location.pathname === '/history' ? "bg-[#4a4a4a] text-[#f5f2ed] shadow-md scale-105" : "text-[#4a4a4a]/50 hover:text-[#4a4a4a] hover:bg-white/50")}>
+               <Clock className="w-5 h-5" strokeWidth={1.5} />
+               <span className="text-[9px] font-sans tracking-widest uppercase">時光</span>
+            </Link>
+         </div>
+      </div>
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#f5f2ed]/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg bg-white/80 border border-white rounded-[32px] p-8 shadow-xl">
+            <h2 className="text-xl font-serif text-[#4a4a4a] mb-2 tracking-widest">歲月回溯 (Historical Import)</h2>
+            <p className="text-xs text-[#4a4a4a]/60 font-sans tracking-wide mb-6 leading-relaxed">
+              感知到您是初次來到浮生誌。若有歷史的記帳陣列 (JSON)，可貼入下方，系統將為您批次銘刻。
+              格式需包含: <code>{"amount, description, payment_method, type, created_at"}</code>。
+            </p>
+            <textarea 
+              className="w-full h-48 bg-[#f5f2ed]/50 border border-[#bccad6]/40 rounded-2xl p-4 text-xs font-mono text-[#4a4a4a] focus:outline-none focus:border-[#bccad6] mb-6 resize-none"
+              placeholder={'[\n  {\n    "amount": 150,\n    "description": "拿鐵",\n    "type": "expense",\n    "payment_method": "cash",\n    "created_at": "2026-06-15T08:30:00Z"\n  }\n]'}
+              value={importStr}
+              onChange={e => setImportStr(e.target.value)}
+            />
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowImportModal(false)}
+                className="px-6 py-2 rounded-full text-xs tracking-widest uppercase opacity-60 hover:opacity-100 transition-opacity"
+              >
+                略過 Skip
+              </button>
+              <button 
+                onClick={handleHistoricalImport}
+                disabled={!importStr || importing}
+                className="bg-[#4a4a4a] text-[#f5f2ed] px-8 py-2 rounded-full text-xs tracking-widest uppercase flex items-center gap-2 hover:bg-[#333] transition-colors disabled:opacity-50"
+              >
+                {importing && <Loader2 className="w-3 h-3 animate-spin"/>}
+                匯入 Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
