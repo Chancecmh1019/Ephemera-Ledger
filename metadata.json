@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "浮生誌 | Ephemera Ledger",
+  "description": "文青風記帳 APP，支援流體滾輪瞬記與多用戶資料隔離",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
