@@ -1,16 +1,15 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
-import { google } from "googleapis";
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 
 export interface RecordData {
   id: string;
-  line_user_id: string;
+  user_id: string;
   type: string;
   amount: number;
   description: string;
@@ -21,53 +20,11 @@ export interface RecordData {
 }
 
 let inMemoryDb: RecordData[] = [];
-let seededUsers = new Set<string>();
 
-async function getSheetOptions() {
-  try {
-    const isSheetEnabled = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_SHEET_ID;
-    if (!isSheetEnabled) return null;
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-    return { sheets, sheetId: process.env.GOOGLE_SHEET_ID };
-  } catch (err: any) {
-    console.error("Failed to initialize Google Sheets Auth:", err.message);
-    return null;
-  }
-}
-
-async function ensureSheetHeaders(sheetOptions: any) {
-  try {
-    const spreadsheet = await sheetOptions.sheets.spreadsheets.get({
-      spreadsheetId: sheetOptions.sheetId
-    });
-    const sheetName = spreadsheet.data.sheets[0].properties.title;
-    sheetOptions.defaultSheetName = sheetName;
-
-    const response = await sheetOptions.sheets.spreadsheets.values.get({
-      spreadsheetId: sheetOptions.sheetId,
-      range: `'${sheetName}'!A1:H1`,
-    });
-    if (!response.data.values || response.data.values.length === 0) {
-       await sheetOptions.sheets.spreadsheets.values.update({
-        spreadsheetId: sheetOptions.sheetId,
-        range: `'${sheetName}'!A1:H1`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [['用戶識別碼 (user_id)', '時間戳記', '標題', '付款方式 (現金/信用卡)', '類別 (收入/支出)', '金額', '是否為補填急件', 'Record_ID']]
-        }
-      });
-    }
-  } catch (e: any) {
-    console.log("Error checking sheet headers:", e.message);
-  }
-}
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 app.get("/api/records", async (req, res) => {
   try {
@@ -76,38 +33,20 @@ app.get("/api/records", async (req, res) => {
       return res.status(400).json({ error: "user_id is required" });
     }
 
-    const sheetOptions = await getSheetOptions();
-    let userRecords = inMemoryDb.filter(r => r.line_user_id === user_id);
+    let userRecords = inMemoryDb.filter(r => r.user_id === user_id);
 
-    if (sheetOptions) {
-      try {
-        await ensureSheetHeaders(sheetOptions);
-        const response = await sheetOptions.sheets.spreadsheets.values.get({
-          spreadsheetId: sheetOptions.sheetId,
-          range: `'${sheetOptions.defaultSheetName}'!A:H`,
-        });
-        const rows = response.data.values || [];
-        const sheetRecords = rows.slice(1)
-          .filter(row => row[0] === user_id)
-          .map((row, idx) => ({
-            line_user_id: row[0],
-            created_at: row[1],
-            description: row[2],
-            payment_method: row[3],
-            type: row[4],
-            amount: Number(row[5]),
-            is_urgent: row[6] === 'true',
-            id: row[7] || `sheet-${idx}`,
-            note: ""
-          }));
-        
-        // Merge records
-        if (sheetRecords.length > 0) {
-          userRecords = sheetRecords;
-          inMemoryDb = inMemoryDb.filter(r => r.line_user_id !== user_id).concat(userRecords);
-        }
-      } catch (e: any) {
-        console.error("Sheet read error, falling back to memory:", e.message);
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('records')
+        .select('*')
+        .eq('user_id', user_id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Supabase read error, falling back to memory:", error.message);
+      } else if (data && data.length > 0) {
+        userRecords = data;
+        inMemoryDb = inMemoryDb.filter(r => r.user_id !== user_id).concat(userRecords);
       }
     }
 
@@ -125,18 +64,18 @@ app.get("/api/records", async (req, res) => {
 
 app.post("/api/records", async (req, res) => {
   try {
-    const { user_id, type, amount, description, payment_method, created_at, id, is_urgent } = req.body;
+    const { user_id, type, amount, description, payment_method, created_at, id, is_urgent, note } = req.body;
     if (!user_id || !type || amount == null || !description || !payment_method) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     const newRecord: RecordData = {
       id: id || crypto.randomUUID(),
-      line_user_id: user_id,
+      user_id: user_id,
       type,
       amount: Number(amount),
       description,
-      note: "",
+      note: note || "",
       payment_method,
       created_at: created_at || new Date().toISOString(),
       is_urgent: is_urgent || false
@@ -144,22 +83,10 @@ app.post("/api/records", async (req, res) => {
 
     inMemoryDb.push(newRecord);
 
-    const sheetOptions = await getSheetOptions();
-    if (sheetOptions) {
-      try {
-        await ensureSheetHeaders(sheetOptions);
-        await sheetOptions.sheets.spreadsheets.values.append({
-          spreadsheetId: sheetOptions.sheetId,
-          range: `'${sheetOptions.defaultSheetName}'!A:H`,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: {
-            values: [
-              [newRecord.line_user_id, newRecord.created_at, newRecord.description, newRecord.payment_method, newRecord.type, newRecord.amount, newRecord.is_urgent ? 'true' : 'false', newRecord.id]
-            ]
-          }
-        });
-      } catch (e: any) {
-        console.error("Sheet write error, falling back to memory:", e.message);
+    if (supabase) {
+      const { error } = await supabase.from('records').insert([newRecord]);
+      if (error) {
+        console.error("Supabase write error, falling back to memory:", error.message);
       }
     }
 
@@ -180,39 +107,14 @@ app.put("/api/records/:id", async (req, res) => {
       inMemoryDb[index] = { ...inMemoryDb[index], ...updates };
     }
 
-    const sheetOptions = await getSheetOptions();
-    if (sheetOptions) {
-      try {
-        await ensureSheetHeaders(sheetOptions);
-        const response = await sheetOptions.sheets.spreadsheets.values.get({
-          spreadsheetId: sheetOptions.sheetId,
-          range: `'${sheetOptions.defaultSheetName}'!A:H`,
-        });
-        const rows = response.data.values || [];
-        const rowIndex = rows.findIndex(row => row[7] === id);
-        if (rowIndex !== -1) {
-          const sheetRow = rowIndex + 1;
-          const curr = rows[rowIndex];
-          const newRow = [
-            updates.line_user_id ?? curr[0],
-            updates.created_at ?? curr[1],
-            updates.description ?? curr[2],
-            updates.payment_method ?? curr[3],
-            updates.type ?? curr[4],
-            updates.amount ?? curr[5],
-            (updates.is_urgent !== undefined) ? (updates.is_urgent ? 'true' : 'false') : curr[6],
-            id
-          ];
-          
-          await sheetOptions.sheets.spreadsheets.values.update({
-            spreadsheetId: sheetOptions.sheetId,
-            range: `'${sheetOptions.defaultSheetName}'!A${sheetRow}:H${sheetRow}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [newRow] }
-          });
-        }
-      } catch (e: any) {
-         console.error("Sheet update error:", e.message);
+    if (supabase) {
+      const { error } = await supabase
+        .from('records')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) {
+        console.error("Supabase update error:", error.message);
       }
     }
     
@@ -228,39 +130,14 @@ app.delete("/api/records/:id", async (req, res) => {
     const { id } = req.params;
     inMemoryDb = inMemoryDb.filter(r => r.id !== id);
 
-    const sheetOptions = await getSheetOptions();
-    if (sheetOptions) {
-      try {
-        await ensureSheetHeaders(sheetOptions);
-        const response = await sheetOptions.sheets.spreadsheets.values.get({
-          spreadsheetId: sheetOptions.sheetId,
-          range: `'${sheetOptions.defaultSheetName}'!A:H`,
-        });
-        const rows = response.data.values || [];
-        const rowIndex = rows.findIndex(row => row[7] === id);
-        if (rowIndex !== -1) { 
-           const meta = await sheetOptions.sheets.spreadsheets.get({ spreadsheetId: sheetOptions.sheetId });
-           const sheet = meta.data.sheets?.find(s => s.properties?.title === sheetOptions.defaultSheetName);
-           if (sheet && sheet.properties?.sheetId != null) {
-              await sheetOptions.sheets.spreadsheets.batchUpdate({
-                spreadsheetId: sheetOptions.sheetId,
-                requestBody: {
-                  requests: [{
-                    deleteDimension: {
-                      range: {
-                        sheetId: sheet.properties.sheetId,
-                        dimension: "ROWS",
-                        startIndex: rowIndex,
-                        endIndex: rowIndex + 1
-                      }
-                    }
-                  }]
-                }
-              });
-           }
-        }
-      } catch (e: any) {
-         console.error("Sheet delete error:", e.message);
+    if (supabase) {
+      const { error } = await supabase
+        .from('records')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Supabase delete error:", error.message);
       }
     }
 
@@ -282,11 +159,11 @@ app.post("/api/auth/init-history", async (req, res) => {
 
     const processedRecords: RecordData[] = records.map(r => ({
       id: r.id || crypto.randomUUID(),
-      line_user_id: user_id,
+      user_id: user_id,
       type: r.type || 'expense',
       amount: Number(r.amount) || 0,
       description: r.description || '歷史紀錄匯入',
-      note: "",
+      note: r.note || "",
       payment_method: r.payment_method || 'cash',
       created_at: r.created_at || new Date().toISOString(),
       is_urgent: false
@@ -294,24 +171,12 @@ app.post("/api/auth/init-history", async (req, res) => {
 
     inMemoryDb.push(...processedRecords);
 
-    const sheetOptions = await getSheetOptions();
-    if (sheetOptions) {
-      try {
-        await ensureSheetHeaders(sheetOptions);
-        
-        const rows = processedRecords.map(r => [
-          r.line_user_id, r.created_at, r.description, r.payment_method, r.type, r.amount, r.is_urgent ? 'true' : 'false', r.id
-        ]);
-
-        await sheetOptions.sheets.spreadsheets.values.append({
-          spreadsheetId: sheetOptions.sheetId,
-          range: `'${sheetOptions.defaultSheetName}'!A:H`,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: { values: rows }
-        });
-        console.log(`Successfully batch inserted ${rows.length} records into sheets for User ${user_id}`);
-      } catch (e: any) {
-        console.error("Sheet batch insert error, falling back to memory:", e.message);
+    if (supabase) {
+      const { error } = await supabase.from('records').insert(processedRecords);
+      if (error) {
+        console.error("Supabase batch insert error, falling back to memory:", error.message);
+      } else {
+        console.log(`Successfully batch inserted ${processedRecords.length} records into Supabase for User ${user_id}`);
       }
     }
 
