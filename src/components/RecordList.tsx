@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { RecordData } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, safeParseDate } from '../lib/utils';
 import { CreditCard, Banknote, Pen, Check, X, AlertCircle } from 'lucide-react';
-import { format, parseISO, isSameDay } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 
 interface RecordListProps {
@@ -38,7 +38,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
     setEditMethod(r.payment_method);
     setEditType(r.type);
     
-    const dateStr = format(parseISO(r.created_at), "yyyy-MM-dd'T'HH:mm");
+    const dateStr = format(safeParseDate(r.created_at), "yyyy-MM-dd'T'HH:mm");
     setEditDate(dateStr);
   };
 
@@ -97,7 +97,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
             // Render day separator logic
             let showDateHeader = false;
             if (i === 0) showDateHeader = true;
-            else if (!isSameDay(parseISO(r.created_at), parseISO(filtered[i - 1].created_at))) {
+            else if (!isSameDay(safeParseDate(r.created_at), safeParseDate(filtered[i - 1].created_at))) {
               showDateHeader = true;
             }
 
@@ -170,7 +170,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                   <div className="flex flex-col gap-1 relative z-10 w-full pr-4">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] opacity-40 font-sans tracking-wider">
-                        {format(parseISO(r.created_at), 'HH:mm')}
+                        {format(safeParseDate(r.created_at), 'HH:mm')}
                       </span>
                       {isUrgent && (
                         <span className="bg-[#d6adad] text-white px-2 py-0.5 rounded text-[8px] uppercase tracking-widest flex items-center gap-1 shadow-sm animate-pulse">
@@ -219,7 +219,7 @@ function DateHeader({ date }: { date: string }) {
   return (
     <div className="relative -left-[64px] md:-left-[72px] mt-6 mb-2 flex items-center gap-4">
        <div className="bg-[#4a4a4a] text-[#f5f2ed] px-3 py-1 rounded text-[9px] uppercase tracking-widest font-sans font-medium shadow-md">
-         {format(parseISO(date), 'MMM d', { locale: zhTW })}
+         {format(safeParseDate(date), 'MMM d', { locale: zhTW })}
        </div>
     </div>
   );
