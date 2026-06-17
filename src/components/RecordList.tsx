@@ -91,12 +91,13 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6 scroll-smooth">
-        <div className="relative border-l border-[#4a4a4a]/10 ml-4 md:ml-6 pb-12 flex flex-col gap-6">
+        {/* 增加左側 padding 以確保時間線點點有空間顯示 */}
+        <div className="relative border-l-2 border-[#4a4a4a]/20 ml-8 md:ml-12 pb-12 flex flex-col gap-6">
           {/* 當處於編輯模式時，只顯示正在編輯的帳目 */}
           {editId ? (
             filtered.filter(r => r.id === editId).map((r) => (
               <div key={r.id} className="relative w-full">
-                 <div className="absolute -left-[45px] md:-left-[53px] top-6 w-6 h-6 rounded-full bg-white border border-[#4a4a4a]/20 flex items-center justify-center z-10 shadow-sm">
+                 <div className="absolute -left-[13px] top-6 w-6 h-6 rounded-full bg-white border-2 border-[#4a4a4a]/30 flex items-center justify-center z-10 shadow-md">
                     <Pen className="w-3 h-3 text-[#4a4a4a] opacity-50" />
                  </div>
                  <div className="bg-white/80 backdrop-blur-xl border border-[#4a4a4a]/20 p-5 rounded-2xl shadow-lg ml-6 relative z-10 flex flex-col gap-4">
@@ -148,7 +149,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                 
                 {/* Timeline Dot */}
                 <div className={cn(
-                  "absolute -left-[41px] md:-left-[49px] top-6 w-4 h-4 rounded-full border-[3px] border-[#f5f2ed] shadow-sm z-10 transition-transform group-hover:scale-125",
+                  "absolute -left-[9px] top-6 w-5 h-5 rounded-full border-[3px] border-[#f5f2ed] shadow-md z-10 transition-transform group-hover:scale-125",
                   r.payment_method === 'cash' ? "bg-[#bccad6]" : "bg-[#d6adad]"
                 )}></div>
                 
