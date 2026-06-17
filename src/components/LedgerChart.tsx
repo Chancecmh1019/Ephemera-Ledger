@@ -18,12 +18,16 @@ export function LedgerChart({ records }: { records: RecordData[] }) {
     }
 
     records.forEach(r => {
-      const dStr = format(parseISO(r.created_at), 'MM/dd');
-      if (dataMap.has(dStr) && r.type === 'expense') {
-        const entry = dataMap.get(dStr)!;
-        if (r.payment_method === 'cash') entry.cashOut += r.amount;
-        if (r.payment_method === 'credit_card') entry.creditOut += r.amount;
-      }
+      try {
+        const d = parseISO(r.created_at);
+        if (isNaN(d.getTime())) return;
+        const dStr = format(d, 'MM/dd');
+        if (dataMap.has(dStr) && r.type === 'expense') {
+          const entry = dataMap.get(dStr)!;
+          if (r.payment_method === 'cash') entry.cashOut += r.amount;
+          if (r.payment_method === 'credit_card') entry.creditOut += r.amount;
+        }
+      } catch {}
     });
 
     return Array.from(dataMap.values());
