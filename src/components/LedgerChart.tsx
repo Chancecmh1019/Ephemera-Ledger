@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { RecordData } from '../types';
-import { format, parseISO, startOfMonth, formatDistanceToNow } from 'date-fns';
-import { zhTW } from 'date-fns/locale';
+import { format } from 'date-fns';
+import { safeParseDate } from '../lib/utils';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export function LedgerChart({ records }: { records: RecordData[] }) {
@@ -19,7 +19,7 @@ export function LedgerChart({ records }: { records: RecordData[] }) {
 
     records.forEach(r => {
       try {
-        const d = parseISO(r.created_at);
+        const d = safeParseDate(r.created_at);
         if (isNaN(d.getTime())) return;
         const dStr = format(d, 'MM/dd');
         if (dataMap.has(dStr) && r.type === 'expense') {
@@ -44,7 +44,7 @@ export function LedgerChart({ records }: { records: RecordData[] }) {
       </div>
       
       <div className="flex-1 w-full min-h-0 -ml-4">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minHeight={200} minWidth={100}>
           <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(74, 74, 74, 0.05)" />
             <XAxis 
