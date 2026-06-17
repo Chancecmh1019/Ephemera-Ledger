@@ -307,20 +307,27 @@ function MainApp() {
               <span className="text-[9px] opacity-40 uppercase tracking-[0.3em] font-sans">Ephemera</span>
             </h1>
           </div>
-          <div className="flex items-center gap-3 bg-white/40 border border-white/60 backdrop-blur-md pl-4 pr-1.5 py-1.5 rounded-full shadow-sm hover:bg-white/60 transition-colors">
-            <div className="flex flex-col items-end mr-1">
-               <span className="text-xs font-serif italic text-[#4a4a4a]">{user.name}</span>
-               <button onClick={logout} className="text-[9px] opacity-40 hover:opacity-80 uppercase tracking-widest transition-opacity mt-0.5">
-                 登出 Logout
-               </button>
+          <div className="flex items-center gap-3">
+            {/* 資料狀態指示器 */}
+            <div className="hidden md:flex items-center gap-2 text-[9px] opacity-40">
+              <span>{records.length} 筆記錄</span>
+              {isRefreshing && <span className="animate-pulse">● 同步中</span>}
             </div>
-            {user.picture ? (
-               <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full border border-white/80 shadow-sm" />
-            ) : (
-               <div className="w-8 h-8 rounded-full bg-[#bccad6]/30 flex items-center justify-center border border-white/80">
-                 <span className="text-xs font-serif">{user.name.charAt(0)}</span>
-               </div>
-            )}
+            <div className="flex items-center gap-3 bg-white/40 border border-white/60 backdrop-blur-md pl-4 pr-1.5 py-1.5 rounded-full shadow-sm hover:bg-white/60 transition-colors">
+              <div className="flex flex-col items-end mr-1">
+                 <span className="text-xs font-serif italic text-[#4a4a4a]">{user.name}</span>
+                 <button onClick={logout} className="text-[9px] opacity-40 hover:opacity-80 uppercase tracking-widest transition-opacity mt-0.5">
+                   登出 Logout
+                 </button>
+              </div>
+              {user.picture ? (
+                 <img src={user.picture} alt="Avatar" className="w-8 h-8 rounded-full border border-white/80 shadow-sm" />
+              ) : (
+                 <div className="w-8 h-8 rounded-full bg-[#bccad6]/30 flex items-center justify-center border border-white/80">
+                   <span className="text-xs font-serif">{user.name.charAt(0)}</span>
+                 </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -349,7 +356,16 @@ function MainApp() {
              } />
              <Route path="/history" element={
                <div className="flex-1 w-full flex flex-col">
-                 <RecordList records={records} onUpdate={handleUpdate} />
+                 {records.length === 0 ? (
+                   <div className="flex-1 flex items-center justify-center">
+                     <div className="text-center">
+                       <p className="text-lg font-serif opacity-40 mb-2">尚無時光記錄</p>
+                       <p className="text-xs opacity-30">請先在「盲記」頁面新增記錄，或匯入歷史資料</p>
+                     </div>
+                   </div>
+                 ) : (
+                   <RecordList records={records} onUpdate={handleUpdate} />
+                 )}
                </div>
              } />
           </Routes>
