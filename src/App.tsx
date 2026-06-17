@@ -50,15 +50,30 @@ function MainApp() {
     
     try {
       const res = await fetch(`/api/records?user_id=${userId}`);
-      if (!res.ok) throw new Error('fetch error');
+      if (!res.ok) {
+        // Fallback to localStorage for static deployments (Vercel)
+        const localData = localStorage.getItem(`ephemera_records_${userId}`);
+        if (localData) {
+           const parsed = JSON.parse(localData);
+           setRecords(parsed);
+           if (parsed.length === 0 && !background) setShowImportModal(true);
+        } else {
+           if (!background) setShowImportModal(true);
+        }
+        return;
+      }
       const data = await res.json();
       setRecords(data);
+      localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(data));
       
       if (data.length === 0 && !background) {
         setShowImportModal(true);
       }
     } catch (e) {
       console.error(e);
+      // Fallback
+      const localData = localStorage.getItem(`ephemera_records_${userId}`);
+      if (localData) setRecords(JSON.parse(localData));
     } finally {
       setLoading(false);
       setTimeout(() => setIsRefreshing(false), 800);
@@ -107,19 +122,20 @@ function MainApp() {
     
     setRecords(prev => {
         const arr = [newRecord, ...prev];
-        return arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
+        return sorted;
     });
 
     try {
-      await fetch('/api/records', {
+      const res = await fetch('/api/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRecord)
       });
-      fetchRecords(user.id, true);
+      if (res.ok) fetchRecords(user.id, true);
     } catch (e) {
-      console.error("Failed to save", e);
-      fetchRecords(user.id, true);
+      console.error("Failed to save to cloud", e);
     }
   };
 
@@ -128,19 +144,20 @@ function MainApp() {
     setIsRefreshing(true);
     setRecords(prev => {
         const arr = prev.map(r => r.id === updatedRecord.id ? updatedRecord : r);
-        return arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
+        return sorted;
     });
     
     try {
-      await fetch(`/api/records/${updatedRecord.id}`, {
+      const res = await fetch(`/api/records/${updatedRecord.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedRecord)
       });
-      fetchRecords(user.id, true);
+      if (res.ok) fetchRecords(user.id, true);
     } catch (e) {
-      console.error("Update failed", e);
-      fetchRecords(user.id, true); 
+      console.error("Update to cloud failed", e);
     }
   };
 
@@ -149,13 +166,25 @@ function MainApp() {
     try {
       setImporting(true);
       const parsed = JSON.parse(importStr);
-      await fetch('/api/auth/init-history', {
+      
+      const res = await fetch('/api/auth/init-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id, records: parsed })
       });
+      
+      if (!res.ok) {
+        // static deploy fallback
+        const currentData = localStorage.getItem(`ephemera_records_${user.id}`);
+        const currentRecords = currentData ? JSON.parse(currentData) : [];
+        const merged = [...currentRecords, ...parsed].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(merged));
+        setRecords(merged);
+      } else {
+        fetchRecords(user.id);
+      }
+      
       setShowImportModal(false);
-      fetchRecords(user.id);
     } catch (e) {
       alert("JSON 格式錯誤或匯入失敗");
       console.error(e);
