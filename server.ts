@@ -278,6 +278,8 @@ app.post("/api/auth/init-history", async (req, res) => {
   res.status(201).json({ success: true, count: processedRecords.length });
 });
 
+export const apiApp = app;
+
 async function startServer() {
   const PORT = 3000;
   if (process.env.NODE_ENV !== "production") {
@@ -299,4 +301,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
