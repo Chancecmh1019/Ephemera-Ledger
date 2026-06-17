@@ -148,7 +148,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
             ))
           ) : (
             /* 非編輯模式：顯示所有帳目 */
-            filtered.slice(0, 100).map((r, i) => {
+            filtered.map((r, i) => {
               // Render day separator logic
               let showDateHeader = false;
               if (i === 0) showDateHeader = true;
@@ -238,10 +238,11 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
 
 function DateHeader({ date }: { date: string }) {
   return (
-    <div className="mt-6 mb-4 flex items-center gap-4 z-10 w-fit">
-       <div className="bg-[#4a4a4a] text-[#f5f2ed] px-3 py-1 rounded text-[9px] uppercase tracking-widest font-sans font-medium shadow-md">
+    <div className="mt-6 mb-4 ml-6 flex items-center gap-4 z-10 w-fit">
+       <div className="bg-[#4a4a4a] text-[#f5f2ed] px-3 py-1 rounded-lg text-[9px] uppercase tracking-widest font-sans font-medium shadow-md">
          {format(safeParseDate(date), 'MMM d', { locale: zhTW })}
        </div>
+       <div className="h-px flex-1 bg-[#4a4a4a]/10 max-w-[100px]"></div>
     </div>
   );
 }
