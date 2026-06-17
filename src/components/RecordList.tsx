@@ -1,18 +1,20 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { RecordData } from '../types';
 import { formatCurrency, cn, safeParseDate } from '../lib/utils';
-import { CreditCard, Banknote, Pen, Check, X, AlertCircle } from 'lucide-react';
+import { CreditCard, Banknote, Pen, Check, X, AlertCircle, Trash2 } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 
 interface RecordListProps {
   records: RecordData[];
   onUpdate: (record: RecordData) => void;
+  onDelete: (recordId: string) => void;
 }
 
-export function RecordList({ records, onUpdate }: RecordListProps) {
+export function RecordList({ records, onUpdate, onDelete }: RecordListProps) {
   const [filter, setFilter] = useState<'all' | 'cash' | 'credit'>('all');
   const [editId, setEditId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Edit State
   const [editDesc, setEditDesc] = useState('');
@@ -21,6 +23,16 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
   const [editDate, setEditDate] = useState('');
   const [editMethod, setEditMethod] = useState<'cash'|'credit_card'>('cash');
   const [editType, setEditType] = useState<'income'|'expense'>('expense');
+
+  // 每 3 分鐘自動重新載入資料
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('時光頁面：定時重新整理資料');
+      window.dispatchEvent(new Event('focus'));
+    }, 3 * 60 * 1000); // 3 分鐘
+
+    return () => clearInterval(interval);
+  }, []);
 
   const filtered = useMemo(() => {
     return records.filter(r => {
@@ -63,6 +75,19 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
     };
     onUpdate(updated);
     setEditId(null);
+  };
+
+  const handleDeleteClick = (recordId: string) => {
+    setDeleteConfirmId(recordId);
+  };
+
+  const confirmDelete = (recordId: string) => {
+    onDelete(recordId);
+    setDeleteConfirmId(null);
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmId(null);
   };
 
   return (
@@ -170,11 +195,29 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                     r.payment_method === 'cash' ? "bg-[#bccad6]" : "bg-[#d6adad]"
                   )}></div>
                   
+                  {/* Delete confirmation overlay */}
+                  {deleteConfirmId === r.id && (
+                    <div className="absolute inset-0 bg-[#d6adad]/95 backdrop-blur-sm rounded-2xl z-20 flex items-center justify-center gap-3 ml-6">
+                      <button
+                        onClick={cancelDelete}
+                        className="px-6 py-2 bg-white/80 text-[#4a4a4a] rounded-full text-xs uppercase tracking-widest hover:bg-white transition-colors flex items-center gap-2"
+                      >
+                        <X className="w-3 h-3" /> 取消
+                      </button>
+                      <button
+                        onClick={() => confirmDelete(r.id)}
+                        className="px-6 py-2 bg-[#b08b8b] text-white rounded-full text-xs uppercase tracking-widest hover:bg-[#9a7676] transition-colors flex items-center gap-2"
+                      >
+                        <Trash2 className="w-3 h-3" /> 確認刪除
+                      </button>
+                    </div>
+                  )}
+                  
                   {/* Card */}
                   <div 
-                    onClick={() => startEdit(r)}
                     className={cn(
-                      "ml-6 p-4 rounded-2xl border transition-all duration-300 cursor-pointer flex justify-between items-center relative overflow-hidden active:scale-[0.98]",
+                      "ml-6 p-4 rounded-2xl border transition-all duration-300 flex justify-between items-center relative overflow-hidden",
+                      deleteConfirmId === r.id ? "opacity-50" : "cursor-pointer active:scale-[0.98]",
                       isUrgent ? "bg-white border-[#d6adad] shadow-[0_4px_20px_rgba(214,173,173,0.15)]" : "bg-white/40 border-white/80 hover:bg-white/80 hover:shadow-md"
                     )}
                   >
@@ -182,7 +225,10 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                     <div className="absolute top-0 right-0 w-16 h-16 bg-[#d6adad]/10 rounded-bl-full pointer-events-none" />
                   )}
 
-                  <div className="flex flex-col gap-1 relative z-10 w-full pr-4">
+                  <div 
+                    onClick={() => deleteConfirmId !== r.id && startEdit(r)}
+                    className="flex flex-col gap-1 relative z-10 w-full pr-4 flex-1"
+                  >
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] opacity-40 font-sans tracking-wider">
                         {format(safeParseDate(r.created_at), 'HH:mm')}
@@ -206,19 +252,39 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                     )}
                   </div>
                   
-                  <div className="flex flex-col items-end gap-1 relative z-10">
-                     <span className={cn(
-                       "font-serif text-lg",
-                       r.type === 'income' ? "text-[#7a998b]" : isUrgent ? "text-[#b08b8b]" : "text-[#4a4a4a]"
-                     )}>
-                        {r.type === 'income' ? '+' : '-'}{formatCurrency(r.amount)}
-                     </span>
-                     <span className="text-[9px] opacity-40 uppercase tracking-widest flex items-center gap-1">
-                       {r.payment_method === 'cash' ? <><Banknote className="w-3 h-3"/> Cash</> : <><CreditCard className="w-3 h-3"/> Card</>}
-                     </span>
+                  <div className="flex items-center gap-3 relative z-10">
+                    <div className="flex flex-col items-end gap-1">
+                       <span className={cn(
+                         "font-serif text-lg",
+                         r.type === 'income' ? "text-[#7a998b]" : isUrgent ? "text-[#b08b8b]" : "text-[#4a4a4a]"
+                       )}>
+                          {r.type === 'income' ? '+' : '-'}{formatCurrency(r.amount)}
+                       </span>
+                       <span className="text-[9px] opacity-40 uppercase tracking-widest flex items-center gap-1">
+                         {r.payment_method === 'cash' ? <><Banknote className="w-3 h-3"/> Cash</> : <><CreditCard className="w-3 h-3"/> Card</>}
+                       </span>
+                    </div>
+                    
+                    {/* Delete button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(r.id);
+                      }}
+                      className="p-2 rounded-full hover:bg-[#d6adad]/20 transition-colors text-[#b08b8b] opacity-0 group-hover:opacity-100"
+                      title="刪除記錄"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
 
-                    {/* Hover Edit Hint */}
+                  {/* Hover Edit Hint */}
+                  <div className="absolute inset-y-0 right-12 w-12 bg-gradient-to-l from-white/90 to-transparent flex items-center justify-end pr-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                     <Pen className="w-4 h-4 text-[#4a4a4a]/50" />
+                  </div>
+                </div>
+              </div>
+            );                    {/* Hover Edit Hint */}
                     <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/90 to-transparent flex items-center justify-end pr-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 pointer-events-none">
                        <Pen className="w-4 h-4 text-[#4a4a4a]/50" />
                     </div>
