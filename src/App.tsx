@@ -135,9 +135,6 @@ function MainApp() {
   const handleRecord = async (amount: number, paymentMethod: 'cash'|'credit_card', type: 'income'|'expense', description: string, note: string, customDate?: string) => {
     if (!user) return;
     
-    console.log('handleRecord 被調用:', { amount, paymentMethod, type, description, note, customDate });
-    console.log('amount 的型別:', typeof amount);
-    
     setIsRefreshing(true);
     const newRecord: RecordData = {
       id: crypto.randomUUID(),
@@ -151,14 +148,10 @@ function MainApp() {
       is_urgent: description === '未命名急件'
     };
     
-    console.log('新記錄:', newRecord);
-    
     // 先更新本地狀態，提供即時反饋
     setRecords(prev => {
-        console.log('更新前的記錄數量:', prev.length);
         const arr = [newRecord, ...prev];
         const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        console.log('更新後的記錄數量:', sorted.length);
         localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
         return sorted;
     });
@@ -208,6 +201,32 @@ function MainApp() {
       if (res.ok) fetchRecords(user.id, true);
     } catch (e) {
       console.error("Update to cloud failed", e);
+    }
+  };
+
+  const handleDelete = async (recordId: string) => {
+    if (!user) return;
+    
+    // 先從本地刪除
+    setRecords(prev => {
+      const filtered = prev.filter(r => r.id !== recordId);
+      localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(filtered));
+      return filtered;
+    });
+    
+    // 然後從後端刪除
+    try {
+      const res = await fetch(`/api/records/${recordId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        console.log('記錄已從雲端刪除');
+      } else {
+        console.error('從雲端刪除失敗');
+      }
+    } catch (e) {
+      console.error("Delete from cloud failed", e);
     }
   };
 
@@ -349,11 +368,11 @@ function MainApp() {
                    <div className="flex-1 flex items-center justify-center">
                      <div className="text-center">
                        <p className="text-lg font-serif opacity-40 mb-2">尚無時光記錄</p>
-                       <p className="text-xs opacity-30">請先在「盲記」頁面新增記錄，或匯入歷史資料</p>
+                       <p className="text-xs opacity-30">請先在「盲記」頁面新增記錄</p>
                      </div>
                    </div>
                  ) : (
-                   <RecordList records={records} onUpdate={handleUpdate} />
+                   <RecordList records={records} onUpdate={handleUpdate} onDelete={handleDelete} />
                  )}
                </div>
              } />
