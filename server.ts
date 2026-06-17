@@ -3,6 +3,12 @@ import path from "path";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+// 載入環境變數（Vercel 會自動注入，但本地開發需要）
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -24,6 +30,11 @@ let inMemoryDb: RecordData[] = [];
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
+
+console.log('🔧 環境檢查:');
+console.log('- SUPABASE_URL:', supabaseUrl ? '✅ 已設定' : '❌ 未設定');
+console.log('- SUPABASE_KEY:', supabaseKey ? '✅ 已設定' : '❌ 未設定');
+
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 if (!supabase) {
@@ -40,24 +51,40 @@ app.get("/api/records", async (req, res) => {
       return res.status(400).json({ error: "user_id is required" });
     }
 
+    console.log(`📖 讀取記錄: user_id=${user_id}`);
+
     let userRecords = inMemoryDb.filter(r => r.user_id === user_id);
 
     if (supabase) {
-      const { data, error } = await supabase
-        .from('records')
-        .select('*')
-        .eq('line_user_id', user_id)
-        .order('created_at', { ascending: false });
+      try {
+        console.log(`🔄 從 Supabase 查詢資料...`);
+        const { data, error } = await supabase
+          .from('records')
+          .select('*')
+          .eq('line_user_id', user_id)
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error("Supabase read error, falling back to memory:", error.message);
-      } else if (data && data.length > 0) {
-        userRecords = data.map(record => {
-          const { line_user_id, ...rest } = record;
-          return { ...rest, user_id: line_user_id } as RecordData;
-        });
-        inMemoryDb = inMemoryDb.filter(r => r.user_id !== user_id).concat(userRecords);
+        if (error) {
+          console.error("❌ Supabase 讀取錯誤:", error.message);
+          console.error("詳細錯誤:", error);
+          // 回傳記憶體中的資料作為 fallback
+        } else if (data && data.length > 0) {
+          console.log(`✅ 從 Supabase 讀取到 ${data.length} 筆資料`);
+          userRecords = data.map(record => {
+            const { line_user_id, ...rest } = record;
+            return { ...rest, user_id: line_user_id } as RecordData;
+          });
+          // 更新記憶體快取
+          inMemoryDb = inMemoryDb.filter(r => r.user_id !== user_id).concat(userRecords);
+        } else {
+          console.log(`ℹ️ Supabase 中沒有資料，使用記憶體資料 (${userRecords.length} 筆)`);
+        }
+      } catch (supabaseError: any) {
+        console.error("❌ Supabase 連線錯誤:", supabaseError.message);
+        // 繼續使用記憶體資料
       }
+    } else {
+      console.log(`⚠️ Supabase 未設定，使用記憶體資料 (${userRecords.length} 筆)`);
     }
 
     userRecords.sort((a, b) => {
@@ -65,9 +92,12 @@ app.get("/api/records", async (req, res) => {
       const da = new Date(a.created_at).getTime();
       return (db || 0) - (da || 0);
     });
+    
+    console.log(`✅ 回傳 ${userRecords.length} 筆記錄`);
     res.json(userRecords);
   } catch (err: any) {
-    console.error("GET /api/records unhandled error:", err.message);
+    console.error("❌ GET /api/records 錯誤:", err.message);
+    console.error("完整錯誤:", err);
     res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
@@ -204,17 +234,37 @@ app.post("/api/auth/init-history", async (req, res) => {
           line_user_id: user_id
         };
       });
-      console.log(`🔄 正在批次寫入 Supabase...`);
-      const { error, data } = await supabase.from('records').insert(supabaseRecords);
-      if (error) {
-        console.error("❌ Supabase 批次寫入錯誤:", error.message, error);
-        return res.status(500).json({ 
-          error: "Supabase insert failed", 
-          details: error.message,
-          memoryCount: processedRecords.length 
+      
+      console.log(`🔄 正在批次寫入 Supabase (共 ${supabaseRecords.length} 筆)...`);
+      
+      // Vercel Serverless Functions 有時間限制，所以分批處理
+      const BATCH_SIZE = 500; // 每批 500 筆
+      let totalInserted = 0;
+      
+      for (let i = 0; i < supabaseRecords.length; i += BATCH_SIZE) {
+        const batch = supabaseRecords.slice(i, i + BATCH_SIZE);
+        console.log(`處理批次 ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(supabaseRecords.length / BATCH_SIZE)}: ${batch.length} 筆`);
+        
+        const { error, data } = await supabase.from('records').insert(batch);
+        
+        if (error) {
+          console.error(`❌ 批次 ${Math.floor(i / BATCH_SIZE) + 1} 寫入錯誤:`, error.message);
+          // 繼續處理下一批，不中斷
+        } else {
+          totalInserted += batch.length;
+          console.log(`✅ 批次 ${Math.floor(i / BATCH_SIZE) + 1} 寫入成功`);
+        }
+      }
+      
+      console.log(`✅ 完成！成功寫入 ${totalInserted}/${processedRecords.length} 筆資料到 Supabase`);
+      
+      if (totalInserted < processedRecords.length) {
+        return res.status(207).json({ 
+          success: true, 
+          count: totalInserted,
+          total: processedRecords.length,
+          message: `部分成功：${totalInserted}/${processedRecords.length} 筆已儲存`
         });
-      } else {
-        console.log(`✅ 成功批次寫入 ${processedRecords.length} 筆資料到 Supabase`);
       }
     } else {
       console.warn('⚠️ Supabase 未設定，資料僅儲存在記憶體中');
@@ -223,7 +273,8 @@ app.post("/api/auth/init-history", async (req, res) => {
     res.status(201).json({ success: true, count: processedRecords.length });
   } catch (err: any) {
     console.error("❌ POST /api/auth/init-history 錯誤:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("完整錯誤:", err);
+    res.status(500).json({ error: err.message, details: err.toString() });
   }
 });
 
