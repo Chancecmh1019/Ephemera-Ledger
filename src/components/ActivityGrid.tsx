@@ -13,7 +13,13 @@ export function ActivityGrid({ records }: { records: RecordData[] }) {
     
     for (let i = GRID_DAYS - 1; i >= 0; i--) {
       const date = subDays(end, i);
-      const dayRecords = records.filter(r => isSameDay(parseISO(r.created_at), date));
+      const dayRecords = records.filter(r => {
+        try {
+          const d = parseISO(r.created_at);
+          if (isNaN(d.getTime())) return false;
+          return isSameDay(d, date);
+        } catch { return false; }
+      });
       const count = dayRecords.length;
       
       let level = 0;
