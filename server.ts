@@ -39,13 +39,16 @@ app.get("/api/records", async (req, res) => {
       const { data, error } = await supabase
         .from('records')
         .select('*')
-        .eq('user_id', user_id)
+        .eq('line_user_id', user_id)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Supabase read error, falling back to memory:", error.message);
       } else if (data && data.length > 0) {
-        userRecords = data;
+        userRecords = data.map(record => {
+          const { line_user_id, ...rest } = record;
+          return { ...rest, user_id: line_user_id } as RecordData;
+        });
         inMemoryDb = inMemoryDb.filter(r => r.user_id !== user_id).concat(userRecords);
       }
     }
@@ -84,7 +87,9 @@ app.post("/api/records", async (req, res) => {
     inMemoryDb.push(newRecord);
 
     if (supabase) {
-      const { error } = await supabase.from('records').insert([newRecord]);
+      const { user_id, ...rest } = newRecord;
+      const supabaseRecord = { ...rest, line_user_id: user_id };
+      const { error } = await supabase.from('records').insert([supabaseRecord]);
       if (error) {
         console.error("Supabase write error, falling back to memory:", error.message);
       }
@@ -108,9 +113,15 @@ app.put("/api/records/:id", async (req, res) => {
     }
 
     if (supabase) {
+      const supabaseUpdates = { ...updates } as any;
+      if (supabaseUpdates.user_id) {
+        supabaseUpdates.line_user_id = supabaseUpdates.user_id;
+        delete supabaseUpdates.user_id;
+      }
+      
       const { error } = await supabase
         .from('records')
-        .update(updates)
+        .update(supabaseUpdates)
         .eq('id', id);
 
       if (error) {
@@ -172,7 +183,14 @@ app.post("/api/auth/init-history", async (req, res) => {
     inMemoryDb.push(...processedRecords);
 
     if (supabase) {
-      const { error } = await supabase.from('records').insert(processedRecords);
+      const supabaseRecords = processedRecords.map(r => {
+        const { user_id, ...rest } = r;
+        return {
+          ...rest,
+          line_user_id: user_id
+        };
+      });
+      const { error } = await supabase.from('records').insert(supabaseRecords);
       if (error) {
         console.error("Supabase batch insert error, falling back to memory:", error.message);
       } else {
