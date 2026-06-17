@@ -46,36 +46,56 @@ function MainApp() {
     else setIsRefreshing(true);
     
     try {
+      // 先從 localStorage 讀取
+      const localData = localStorage.getItem(`ephemera_records_${userId}`);
+      let localRecords: RecordData[] = [];
+      
+      if (localData) {
+        const parsed = JSON.parse(localData);
+        localRecords = parsed.map((r: any) => ({
+          ...r,
+          amount: Number(r.amount)
+        }));
+        // 先顯示本地資料
+        setRecords(localRecords);
+      }
+      
+      // 然後嘗試從 API 獲取更新
       const res = await fetch(`/api/records?user_id=${userId}`);
       if (!res.ok) {
-        // Fallback to localStorage for static deployments (Vercel)
-        const localData = localStorage.getItem(`ephemera_records_${userId}`);
-        if (localData) {
-           const parsed = JSON.parse(localData);
-           // 確保 amount 是數字類型
-           const normalized = parsed.map((r: any) => ({
-             ...r,
-             amount: Number(r.amount)
-           }));
-           setRecords(normalized);
-        }
+        console.log('API 無法連線，使用本地資料');
         return;
       }
+      
       const data = await res.json();
-      // 確保 amount 是數字類型
-      const normalized = data.map((r: any) => ({
+      const apiRecords = data.map((r: any) => ({
         ...r,
         amount: Number(r.amount)
       }));
-      setRecords(normalized);
-      localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(normalized));
+      
+      console.log('本地記錄數:', localRecords.length);
+      console.log('API 記錄數:', apiRecords.length);
+      
+      // 合併本地和 API 的資料，去重
+      const recordMap = new Map<string, RecordData>();
+      
+      // 先加入本地資料
+      localRecords.forEach(r => recordMap.set(r.id, r));
+      
+      // 再加入 API 資料（會覆蓋本地的舊版本）
+      apiRecords.forEach(r => recordMap.set(r.id, r));
+      
+      const mergedRecords = Array.from(recordMap.values());
+      console.log('合併後記錄數:', mergedRecords.length);
+      
+      setRecords(mergedRecords);
+      localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(mergedRecords));
     } catch (e) {
-      console.error(e);
-      // Fallback
+      console.error('fetchRecords 錯誤:', e);
+      // 發生錯誤時使用本地資料
       const localData = localStorage.getItem(`ephemera_records_${userId}`);
       if (localData) {
         const parsed = JSON.parse(localData);
-        // 確保 amount 是數字類型
         const normalized = parsed.map((r: any) => ({
           ...r,
           amount: Number(r.amount)
