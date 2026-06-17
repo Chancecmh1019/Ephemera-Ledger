@@ -44,14 +44,20 @@ async function getSheetOptions() {
 
 async function ensureSheetHeaders(sheetOptions: any) {
   try {
+    const spreadsheet = await sheetOptions.sheets.spreadsheets.get({
+      spreadsheetId: sheetOptions.sheetId
+    });
+    const sheetName = spreadsheet.data.sheets[0].properties.title;
+    sheetOptions.defaultSheetName = sheetName;
+
     const response = await sheetOptions.sheets.spreadsheets.values.get({
       spreadsheetId: sheetOptions.sheetId,
-      range: '【浮生收支流水帳】!A1:H1',
+      range: `'${sheetName}'!A1:H1`,
     });
     if (!response.data.values || response.data.values.length === 0) {
        await sheetOptions.sheets.spreadsheets.values.update({
         spreadsheetId: sheetOptions.sheetId,
-        range: '【浮生收支流水帳】!A1:H1',
+        range: `'${sheetName}'!A1:H1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [['用戶識別碼 (user_id)', '時間戳記', '標題', '付款方式 (現金/信用卡)', '類別 (收入/支出)', '金額', '是否為補填急件', 'Record_ID']]
@@ -78,7 +84,7 @@ app.get("/api/records", async (req, res) => {
         await ensureSheetHeaders(sheetOptions);
         const response = await sheetOptions.sheets.spreadsheets.values.get({
           spreadsheetId: sheetOptions.sheetId,
-          range: '【浮生收支流水帳】!A:H',
+          range: `'${sheetOptions.defaultSheetName}'!A:H`,
         });
         const rows = response.data.values || [];
         const sheetRecords = rows.slice(1)
@@ -141,9 +147,10 @@ app.post("/api/records", async (req, res) => {
     const sheetOptions = await getSheetOptions();
     if (sheetOptions) {
       try {
+        await ensureSheetHeaders(sheetOptions);
         await sheetOptions.sheets.spreadsheets.values.append({
           spreadsheetId: sheetOptions.sheetId,
-          range: '【浮生收支流水帳】!A:H',
+          range: `'${sheetOptions.defaultSheetName}'!A:H`,
           valueInputOption: 'USER_ENTERED',
           requestBody: {
             values: [
@@ -176,9 +183,10 @@ app.put("/api/records/:id", async (req, res) => {
     const sheetOptions = await getSheetOptions();
     if (sheetOptions) {
       try {
+        await ensureSheetHeaders(sheetOptions);
         const response = await sheetOptions.sheets.spreadsheets.values.get({
           spreadsheetId: sheetOptions.sheetId,
-          range: '【浮生收支流水帳】!A:H',
+          range: `'${sheetOptions.defaultSheetName}'!A:H`,
         });
         const rows = response.data.values || [];
         const rowIndex = rows.findIndex(row => row[7] === id);
@@ -198,7 +206,7 @@ app.put("/api/records/:id", async (req, res) => {
           
           await sheetOptions.sheets.spreadsheets.values.update({
             spreadsheetId: sheetOptions.sheetId,
-            range: `【浮生收支流水帳】!A${sheetRow}:H${sheetRow}`,
+            range: `'${sheetOptions.defaultSheetName}'!A${sheetRow}:H${sheetRow}`,
             valueInputOption: 'USER_ENTERED',
             requestBody: { values: [newRow] }
           });
@@ -216,45 +224,51 @@ app.put("/api/records/:id", async (req, res) => {
 });
 
 app.delete("/api/records/:id", async (req, res) => {
-  const { id } = req.params;
-  inMemoryDb = inMemoryDb.filter(r => r.id !== id);
+  try {
+    const { id } = req.params;
+    inMemoryDb = inMemoryDb.filter(r => r.id !== id);
 
-  const sheetOptions = await getSheetOptions();
-  if (sheetOptions) {
-    try {
-      const response = await sheetOptions.sheets.spreadsheets.values.get({
-        spreadsheetId: sheetOptions.sheetId,
-        range: '【浮生收支流水帳】!A:H',
-      });
-      const rows = response.data.values || [];
-      const rowIndex = rows.findIndex(row => row[7] === id);
-      if (rowIndex !== -1) { 
-         const meta = await sheetOptions.sheets.spreadsheets.get({ spreadsheetId: sheetOptions.sheetId });
-         const sheet = meta.data.sheets?.find(s => s.properties?.title === '【浮生收支流水帳】');
-         if (sheet && sheet.properties?.sheetId != null) {
-            await sheetOptions.sheets.spreadsheets.batchUpdate({
-              spreadsheetId: sheetOptions.sheetId,
-              requestBody: {
-                requests: [{
-                  deleteDimension: {
-                    range: {
-                      sheetId: sheet.properties.sheetId,
-                      dimension: "ROWS",
-                      startIndex: rowIndex,
-                      endIndex: rowIndex + 1
+    const sheetOptions = await getSheetOptions();
+    if (sheetOptions) {
+      try {
+        await ensureSheetHeaders(sheetOptions);
+        const response = await sheetOptions.sheets.spreadsheets.values.get({
+          spreadsheetId: sheetOptions.sheetId,
+          range: `'${sheetOptions.defaultSheetName}'!A:H`,
+        });
+        const rows = response.data.values || [];
+        const rowIndex = rows.findIndex(row => row[7] === id);
+        if (rowIndex !== -1) { 
+           const meta = await sheetOptions.sheets.spreadsheets.get({ spreadsheetId: sheetOptions.sheetId });
+           const sheet = meta.data.sheets?.find(s => s.properties?.title === sheetOptions.defaultSheetName);
+           if (sheet && sheet.properties?.sheetId != null) {
+              await sheetOptions.sheets.spreadsheets.batchUpdate({
+                spreadsheetId: sheetOptions.sheetId,
+                requestBody: {
+                  requests: [{
+                    deleteDimension: {
+                      range: {
+                        sheetId: sheet.properties.sheetId,
+                        dimension: "ROWS",
+                        startIndex: rowIndex,
+                        endIndex: rowIndex + 1
+                      }
                     }
-                  }
-                }]
-              }
-            });
-         }
+                  }]
+                }
+              });
+           }
+        }
+      } catch (e: any) {
+         console.error("Sheet delete error:", e.message);
       }
-    } catch (e: any) {
-      console.error("Sheet delete error:", e.message);
     }
-  }
 
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("DELETE unhandled error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/api/auth/init-history", async (req, res) => {
@@ -291,7 +305,7 @@ app.post("/api/auth/init-history", async (req, res) => {
 
         await sheetOptions.sheets.spreadsheets.values.append({
           spreadsheetId: sheetOptions.sheetId,
-          range: '【浮生收支流水帳】!A:H',
+          range: `'${sheetOptions.defaultSheetName}'!A:H`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: rows }
         });
