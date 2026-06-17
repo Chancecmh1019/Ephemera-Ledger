@@ -22,13 +22,32 @@ export function WaterTank({ records, alertThreshold = 5000, isRefreshing = false
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
     
-    console.log('最早的記錄:', sortedRecords[0]);
-    console.log('最新的記錄:', sortedRecords[sortedRecords.length - 1]);
+    if (sortedRecords.length > 0) {
+      console.log('最早的記錄:', {
+        id: sortedRecords[0].id,
+        date: sortedRecords[0].created_at,
+        type: sortedRecords[0].type,
+        amount: sortedRecords[0].amount,
+        description: sortedRecords[0].description
+      });
+      console.log('最新的記錄:', {
+        id: sortedRecords[sortedRecords.length - 1].id,
+        date: sortedRecords[sortedRecords.length - 1].created_at,
+        type: sortedRecords[sortedRecords.length - 1].type,
+        amount: sortedRecords[sortedRecords.length - 1].amount,
+        description: sortedRecords[sortedRecords.length - 1].description
+      });
+    }
     
-    const balance = sortedRecords.reduce((acc, r) => {
+    const balance = sortedRecords.reduce((acc, r, index) => {
       const amount = Number(r.amount);
-      // 收入增加餘額，支出減少餘額
       const newAcc = r.type === 'income' ? acc + amount : acc - amount;
+      
+      // 只印出前5筆和後5筆
+      if (index < 5 || index >= sortedRecords.length - 5) {
+        console.log(`[${index}] ${r.type} ${amount}: ${acc} → ${newAcc}`);
+      }
+      
       return newAcc;
     }, 0);
     
