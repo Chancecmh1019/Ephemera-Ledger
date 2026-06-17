@@ -208,23 +208,29 @@ function MainApp() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-[#f5f2ed]">
-        <div className="w-32 h-32 bg-white/50 backdrop-blur-xl rounded-full flex items-center justify-center shadow-lg border border-white/60 mb-8 relative z-10 transition-transform hover:scale-105">
-          <Leaf className="w-12 h-12 text-[#bccad6]" strokeWidth={1} />
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-4 sm:p-6 text-center bg-[#f5f2ed] relative overflow-hidden">
+        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-white/50 backdrop-blur-xl rounded-full flex items-center justify-center shadow-lg border border-white/60 mb-6 sm:mb-8 relative z-10 transition-transform hover:scale-105">
+          <Leaf className="w-10 h-10 sm:w-12 sm:h-12 text-[#bccad6]" strokeWidth={1} />
         </div>
-        <h1 className="text-4xl font-serif tracking-widest text-[#4a4a4a] mb-3 relative z-10">浮生誌</h1>
-        <p className="text-sm text-[#4a4a4a] opacity-50 tracking-widest mb-16 relative z-10 font-serif">歲月留痕 · Ephemera Ledger</p>
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif tracking-widest text-[#4a4a4a] mb-2 sm:mb-3 relative z-10">浮生誌</h1>
+        <p className="text-xs sm:text-sm text-[#4a4a4a] opacity-50 tracking-widest mb-10 sm:mb-16 relative z-10 font-serif">歲月留痕 · Ephemera Ledger</p>
         
-        <button 
-          onClick={() => login()}
-          className="relative z-10 bg-white/60 backdrop-blur-md text-[#4a4a4a] border border-[#bccad6]/50 px-10 py-4 rounded-full text-xs tracking-widest font-sans flex items-center gap-3 hover:bg-white/90 hover:shadow-lg transition-all duration-300"
-        >
-          <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
-          以 Google 登入開始留痕
-        </button>
+        <div className="relative z-10 flex flex-col items-center gap-4 w-full max-w-[280px] sm:max-w-[320px]">
+          <button 
+            onClick={() => login()}
+            className="w-full bg-white/60 backdrop-blur-md text-[#4a4a4a] border border-[#bccad6]/50 px-6 py-3.5 sm:px-10 sm:py-4 rounded-full text-[11px] sm:text-xs tracking-widest font-sans flex items-center justify-center gap-3 hover:bg-white/90 hover:shadow-lg transition-all duration-300"
+          >
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4 sm:w-5 sm:h-5" />
+            以 Google 登入開始留痕
+          </button>
+          
+          <p className="text-[9px] sm:text-[10px] text-[#4a4a4a] opacity-40 font-sans tracking-wide leading-relaxed">
+            ※ 若點擊無反應，可能是您的瀏覽器阻擋了彈窗。<br/>請複製網址並使用 Safari 或 Chrome 重新開啟。
+          </p>
+        </div>
         
-        <div className="absolute top-[20%] left-[-10%] w-[500px] h-[500px] bg-[#bccad6] rounded-full blur-[120px] opacity-40 pointer-events-none"></div>
-        <div className="absolute bottom-[10%] right-[-10%] w-[400px] h-[400px] bg-[#d6adad] rounded-full blur-[120px] opacity-30 pointer-events-none"></div>
+        <div className="absolute top-[10%] left-[-20%] sm:left-[-10%] w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-[#bccad6] rounded-full blur-[80px] sm:blur-[120px] opacity-40 pointer-events-none"></div>
+        <div className="absolute bottom-[5%] right-[-20%] sm:right-[-10%] w-[250px] sm:w-[400px] h-[250px] sm:h-[400px] bg-[#d6adad] rounded-full blur-[80px] sm:blur-[120px] opacity-30 pointer-events-none"></div>
       </div>
     );
   }
