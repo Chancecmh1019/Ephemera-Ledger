@@ -1,2 +1,2 @@
-import { apiApp } from '../server.js';
+import { apiApp } from '../server';
 export default apiApp;
