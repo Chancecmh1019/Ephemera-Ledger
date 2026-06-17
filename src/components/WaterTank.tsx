@@ -11,12 +11,24 @@ interface WaterTankProps {
 
 export function WaterTank({ records, alertThreshold = 5000, isRefreshing = false }: WaterTankProps) {
   const cashBalance = useMemo(() => {
-    return records
-      .filter((r) => r.payment_method === 'cash')
-      .reduce((acc, r) => {
-        // 收入增加餘額，支出減少餘額
-        return r.type === 'income' ? acc + r.amount : acc - r.amount;
-      }, 0);
+    console.log('WaterTank: 計算現金餘額');
+    console.log('所有記錄:', records);
+    
+    const cashRecords = records.filter((r) => r.payment_method === 'cash');
+    console.log('現金記錄:', cashRecords);
+    
+    const balance = cashRecords.reduce((acc, r) => {
+      const amount = Number(r.amount);
+      console.log(`處理記錄 ${r.id}: type=${r.type}, amount=${amount}, 當前累計=${acc}`);
+      
+      // 收入增加餘額，支出減少餘額
+      const newAcc = r.type === 'income' ? acc + amount : acc - amount;
+      console.log(`新累計: ${newAcc}`);
+      return newAcc;
+    }, 0);
+    
+    console.log('最終現金餘額:', balance);
+    return balance;
   }, [records]);
 
   // Max visual balance at 50,000 to scale the water level
