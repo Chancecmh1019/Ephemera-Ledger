@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { RecordData } from '../types';
-import { subDays, format, parseISO, isSameDay } from 'date-fns';
-import { cn } from '../lib/utils';
+import { subDays, format, isSameDay } from 'date-fns';
+import { cn, safeParseDate } from '../lib/utils';
 import { Info } from 'lucide-react';
 
 export function ActivityGrid({ records }: { records: RecordData[] }) {
@@ -15,7 +15,7 @@ export function ActivityGrid({ records }: { records: RecordData[] }) {
       const date = subDays(end, i);
       const dayRecords = records.filter(r => {
         try {
-          const d = parseISO(r.created_at);
+          const d = safeParseDate(r.created_at);
           if (isNaN(d.getTime())) return false;
           return isSameDay(d, date);
         } catch { return false; }
