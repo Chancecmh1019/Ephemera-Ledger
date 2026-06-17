@@ -55,25 +55,43 @@ function MainApp() {
         const localData = localStorage.getItem(`ephemera_records_${userId}`);
         if (localData) {
            const parsed = JSON.parse(localData);
-           setRecords(parsed);
-           if (parsed.length === 0 && !background) setShowImportModal(true);
+           // 確保 amount 是數字類型
+           const normalized = parsed.map((r: any) => ({
+             ...r,
+             amount: Number(r.amount)
+           }));
+           setRecords(normalized);
+           if (normalized.length === 0 && !background) setShowImportModal(true);
         } else {
            if (!background) setShowImportModal(true);
         }
         return;
       }
       const data = await res.json();
-      setRecords(data);
-      localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(data));
+      // 確保 amount 是數字類型
+      const normalized = data.map((r: any) => ({
+        ...r,
+        amount: Number(r.amount)
+      }));
+      setRecords(normalized);
+      localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(normalized));
       
-      if (data.length === 0 && !background) {
+      if (normalized.length === 0 && !background) {
         setShowImportModal(true);
       }
     } catch (e) {
       console.error(e);
       // Fallback
       const localData = localStorage.getItem(`ephemera_records_${userId}`);
-      if (localData) setRecords(JSON.parse(localData));
+      if (localData) {
+        const parsed = JSON.parse(localData);
+        // 確保 amount 是數字類型
+        const normalized = parsed.map((r: any) => ({
+          ...r,
+          amount: Number(r.amount)
+        }));
+        setRecords(normalized);
+      }
     } finally {
       setLoading(false);
       setTimeout(() => setIsRefreshing(false), 800);
@@ -150,18 +168,25 @@ function MainApp() {
   const handleUpdate = async (updatedRecord: RecordData) => {
     if (!user) return;
     setIsRefreshing(true);
+    
+    // 確保 amount 是數字類型
+    const normalizedRecord = {
+      ...updatedRecord,
+      amount: Number(updatedRecord.amount)
+    };
+    
     setRecords(prev => {
-        const arr = prev.map(r => r.id === updatedRecord.id ? updatedRecord : r);
+        const arr = prev.map(r => r.id === normalizedRecord.id ? normalizedRecord : r);
         const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
         return sorted;
     });
     
     try {
-      const res = await fetch(`/api/records/${updatedRecord.id}`, {
+      const res = await fetch(`/api/records/${normalizedRecord.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedRecord)
+        body: JSON.stringify(normalizedRecord)
       });
       if (res.ok) fetchRecords(user.id, true);
     } catch (e) {
