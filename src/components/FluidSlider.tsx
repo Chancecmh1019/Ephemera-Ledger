@@ -11,7 +11,7 @@ function getLocalCurrentTime() {
 }
 
 interface FluidSliderProps {
-  onRecord: (amount: number, method: 'cash'|'credit_card', type: 'income'|'expense', desc: string, date?: string) => void;
+  onRecord: (amount: number, method: 'cash'|'credit_card', type: 'income'|'expense', desc: string, note: string, date?: string) => void;
 }
 
 export function FluidSlider({ onRecord }: FluidSliderProps) {
@@ -25,6 +25,7 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
   // Manual Mode State
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualDesc, setManualDesc] = useState('');
+  const [manualNote, setManualNote] = useState('');
   const [manualMethod, setManualMethod] = useState<'cash'|'credit_card'>('cash');
   const [manualType, setManualType] = useState<'income'|'expense'>('expense');
 
@@ -76,7 +77,7 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
         try { safeISODate = new Date(date).toISOString(); } catch { safeISODate = new Date().toISOString(); }
       }
 
-      onRecord(amount, method, 'expense', '未命名急件', safeISODate);
+      onRecord(amount, method, 'expense', '未命名急件', '', safeISODate);
       
       if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
       
@@ -93,11 +94,12 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
       try { safeISODate = new Date(date).toISOString(); } catch { safeISODate = new Date().toISOString(); }
     }
 
-    onRecord(amount, manualMethod, manualType, manualDesc || '精確記帳', safeISODate);
+    onRecord(amount, manualMethod, manualType, manualDesc || '精確記帳', manualNote, safeISODate);
     setIsManualMode(false);
     setAmount(0);
     setDate(getLocalCurrentTime());
     setManualDesc('');
+    setManualNote('');
   };
 
   return (
@@ -187,6 +189,16 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
                onChange={(e) => setManualDesc(e.target.value)}
                className="bg-transparent text-sm font-sans text-[#4a4a4a] outline-none border-b border-[#4a4a4a]/10 pb-1"
                placeholder="買了些什麼..."
+             />
+          </div>
+          <div className="flex flex-col gap-1">
+             <label className="text-[10px] tracking-widest uppercase opacity-40 font-sans">Note (Optional)</label>
+             <textarea 
+               value={manualNote}
+               onChange={(e) => setManualNote(e.target.value)}
+               className="bg-transparent text-xs font-sans text-[#4a4a4a] outline-none border border-[#4a4a4a]/10 rounded-lg p-2 resize-none"
+               placeholder="額外備註..."
+               rows={2}
              />
           </div>
           <div className="grid grid-cols-2 gap-3 mt-2">
