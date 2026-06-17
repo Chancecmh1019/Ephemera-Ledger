@@ -64,7 +64,13 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
     
     if (actionDir !== 0 && amount > 0) {
       const method = actionDir === -1 ? 'cash' : 'credit_card';
-      onRecord(amount, method, 'expense', '未命名急件', date ? new Date(date).toISOString() : undefined);
+      
+      let safeISODate: string | undefined = undefined;
+      if (date) {
+        try { safeISODate = new Date(date).toISOString(); } catch { safeISODate = new Date().toISOString(); }
+      }
+
+      onRecord(amount, method, 'expense', '未命名急件', safeISODate);
       
       if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
       
@@ -76,7 +82,12 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
 
   const handleManualSubmit = () => {
     if (amount <= 0) return;
-    onRecord(amount, manualMethod, manualType, manualDesc || '精確記帳', date ? new Date(date).toISOString() : undefined);
+    let safeISODate: string | undefined = undefined;
+    if (date) {
+      try { safeISODate = new Date(date).toISOString(); } catch { safeISODate = new Date().toISOString(); }
+    }
+
+    onRecord(amount, manualMethod, manualType, manualDesc || '精確記帳', safeISODate);
     setIsManualMode(false);
     setAmount(0);
     setDate('');
