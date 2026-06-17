@@ -26,6 +26,13 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
+if (!supabase) {
+  console.warn('⚠️ Supabase 未設定！資料將僅儲存在記憶體中。');
+  console.warn('請在 .env 檔案中設定 SUPABASE_URL 和 SUPABASE_KEY');
+} else {
+  console.log('✅ Supabase 客戶端已初始化');
+}
+
 app.get("/api/records", async (req, res) => {
   try {
     const { user_id } = req.query;
@@ -89,10 +96,16 @@ app.post("/api/records", async (req, res) => {
     if (supabase) {
       const { user_id, ...rest } = newRecord;
       const supabaseRecord = { ...rest, line_user_id: user_id };
+      console.log(`儲存記錄到 Supabase: ${description}, 金額: ${amount}`);
       const { error } = await supabase.from('records').insert([supabaseRecord]);
       if (error) {
-        console.error("Supabase write error, falling back to memory:", error.message);
+        console.error("❌ Supabase 寫入錯誤:", error.message, error);
+        // 仍然回傳成功，因為已儲存到記憶體
+      } else {
+        console.log('✅ Supabase 寫入成功');
       }
+    } else {
+      console.warn('⚠️ Supabase 未設定，僅儲存到記憶體');
     }
 
     res.status(201).json(newRecord);
@@ -166,7 +179,7 @@ app.post("/api/auth/init-history", async (req, res) => {
       return res.status(400).json({ error: "user_id and records array are required" });
     }
 
-    console.log(`Starting historical import for ${user_id}, records count: ${records.length}`);
+    console.log(`🔄 開始匯入歷史資料: 使用者 ${user_id}, 共 ${records.length} 筆記錄`);
 
     const processedRecords: RecordData[] = records.map(r => ({
       id: r.id || crypto.randomUUID(),
@@ -181,6 +194,7 @@ app.post("/api/auth/init-history", async (req, res) => {
     }));
 
     inMemoryDb.push(...processedRecords);
+    console.log(`✅ 已將 ${processedRecords.length} 筆資料加入記憶體`);
 
     if (supabase) {
       const supabaseRecords = processedRecords.map(r => {
@@ -190,17 +204,25 @@ app.post("/api/auth/init-history", async (req, res) => {
           line_user_id: user_id
         };
       });
-      const { error } = await supabase.from('records').insert(supabaseRecords);
+      console.log(`🔄 正在批次寫入 Supabase...`);
+      const { error, data } = await supabase.from('records').insert(supabaseRecords);
       if (error) {
-        console.error("Supabase batch insert error, falling back to memory:", error.message);
+        console.error("❌ Supabase 批次寫入錯誤:", error.message, error);
+        return res.status(500).json({ 
+          error: "Supabase insert failed", 
+          details: error.message,
+          memoryCount: processedRecords.length 
+        });
       } else {
-        console.log(`Successfully batch inserted ${processedRecords.length} records into Supabase for User ${user_id}`);
+        console.log(`✅ 成功批次寫入 ${processedRecords.length} 筆資料到 Supabase`);
       }
+    } else {
+      console.warn('⚠️ Supabase 未設定，資料僅儲存在記憶體中');
     }
 
     res.status(201).json({ success: true, count: processedRecords.length });
   } catch (err: any) {
-    console.error("POST /api/auth/init-history unhandled error:", err.message);
+    console.error("❌ POST /api/auth/init-history 錯誤:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
