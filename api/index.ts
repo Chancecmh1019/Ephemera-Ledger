@@ -1,7 +1,6 @@
 import express from "express";
 import crypto from "crypto";
 import { createClient } from '@supabase/supabase-js';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
