@@ -115,11 +115,14 @@ function MainApp() {
   const handleRecord = async (amount: number, paymentMethod: 'cash'|'credit_card', type: 'income'|'expense', description: string, note: string, customDate?: string) => {
     if (!user) return;
     
+    console.log('handleRecord 被調用:', { amount, paymentMethod, type, description, note, customDate });
+    console.log('amount 的型別:', typeof amount);
+    
     setIsRefreshing(true);
     const newRecord: RecordData = {
       id: crypto.randomUUID(),
       user_id: user.id,
-      amount,
+      amount: Number(amount), // 確保是數字
       payment_method: paymentMethod,
       type,
       description,
@@ -128,10 +131,14 @@ function MainApp() {
       is_urgent: description === '未命名急件'
     };
     
+    console.log('新記錄:', newRecord);
+    
     // 先更新本地狀態，提供即時反饋
     setRecords(prev => {
+        console.log('更新前的記錄數量:', prev.length);
         const arr = [newRecord, ...prev];
         const sorted = arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        console.log('更新後的記錄數量:', sorted.length);
         localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(sorted));
         return sorted;
     });
