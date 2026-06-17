@@ -342,11 +342,11 @@ function MainApp() {
         <div className="flex-1 w-full relative flex flex-col">
           <Routes>
              <Route path="/" element={
-               <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 w-full">
-                 <div className="flex-none lg:flex-1 w-full flex flex-col gap-6 lg:gap-8 h-[380px] sm:h-[400px] lg:h-auto">
+               <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 flex-1 w-full min-h-[600px]">
+                 <div className="flex-1 w-full flex flex-col gap-6 lg:gap-8">
                    <FluidSlider onRecord={handleRecord} />
                  </div>
-                 <div className="flex-none lg:flex-[1.2] w-full flex flex-col gap-6 lg:gap-8 h-[400px] lg:h-auto lg:min-h-0">
+                 <div className="flex-1 w-full flex flex-col gap-6 lg:gap-8">
                    <WaterTank records={records} alertThreshold={3000} isRefreshing={isRefreshing} />
                  </div>
                </div>
