@@ -6,7 +6,7 @@ import { FluidSlider } from './components/FluidSlider';
 import { RecordList } from './components/RecordList';
 import { BalanceRings } from './components/BalanceRings';
 import { ActivityGrid } from './components/ActivityGrid';
-import { Leaf, Loader2, LayoutGrid, Clock, Plus, BarChart } from 'lucide-react';
+import { Leaf, Loader2, Clock, Plus, BarChart } from 'lucide-react';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { cn } from './lib/utils';
@@ -40,9 +40,6 @@ function MainApp() {
   const [records, setRecords] = useState<RecordData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importStr, setImportStr] = useState('');
-  const [importing, setImporting] = useState(false);
 
   const fetchRecords = useCallback(async (userId: string, background = false) => {
     if (!background) setLoading(true);
@@ -61,9 +58,6 @@ function MainApp() {
              amount: Number(r.amount)
            }));
            setRecords(normalized);
-           if (normalized.length === 0 && !background) setShowImportModal(true);
-        } else {
-           if (!background) setShowImportModal(true);
         }
         return;
       }
@@ -75,10 +69,6 @@ function MainApp() {
       }));
       setRecords(normalized);
       localStorage.setItem(`ephemera_records_${userId}`, JSON.stringify(normalized));
-      
-      if (normalized.length === 0 && !background) {
-        setShowImportModal(true);
-      }
     } catch (e) {
       console.error(e);
       // Fallback
@@ -191,59 +181,6 @@ function MainApp() {
       if (res.ok) fetchRecords(user.id, true);
     } catch (e) {
       console.error("Update to cloud failed", e);
-    }
-  };
-
-  const handleHistoricalImport = async () => {
-    if (!user || !importStr) return;
-    try {
-      setImporting(true);
-      const parsed = JSON.parse(importStr);
-      
-      console.log(`準備匯入 ${parsed.length} 筆歷史資料...`);
-      
-      // 確保每筆資料都有必要的欄位和正確的 ID
-      const processedRecords = parsed.map((r: any) => ({
-        id: r.id || crypto.randomUUID(),
-        user_id: user.id,
-        type: r.type || 'expense',
-        amount: Number(r.amount) || 0,
-        description: r.description || '歷史紀錄',
-        note: r.note || '',
-        payment_method: r.payment_method || 'cash',
-        created_at: r.created_at || new Date().toISOString(),
-        is_urgent: false
-      }));
-      
-      const res = await fetch('/api/auth/init-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, records: processedRecords })
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('伺服器回應錯誤:', errorText);
-        // static deploy fallback
-        const currentData = localStorage.getItem(`ephemera_records_${user.id}`);
-        const currentRecords = currentData ? JSON.parse(currentData) : [];
-        const merged = [...currentRecords, ...processedRecords].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        localStorage.setItem(`ephemera_records_${user.id}`, JSON.stringify(merged));
-        setRecords(merged);
-        alert(`已儲存 ${processedRecords.length} 筆資料到本地端（伺服器連線失敗）`);
-      } else {
-        const result = await res.json();
-        console.log('匯入成功:', result);
-        alert(`成功匯入 ${processedRecords.length} 筆歷史資料！`);
-        fetchRecords(user.id);
-      }
-      
-      setShowImportModal(false);
-    } catch (e) {
-      console.error('匯入錯誤詳情:', e);
-      alert(`匯入失敗: ${e instanceof Error ? e.message : '未知錯誤'}`);
-    } finally {
-      setImporting(false);
     }
   };
 
@@ -414,40 +351,6 @@ function MainApp() {
             </Link>
          </div>
       </div>
-
-      {showImportModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#f5f2ed]/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg bg-white/80 border border-white rounded-[32px] p-8 shadow-xl">
-            <h2 className="text-xl font-serif text-[#4a4a4a] mb-2 tracking-widest">歲月回溯 (Historical Import)</h2>
-            <p className="text-xs text-[#4a4a4a]/60 font-sans tracking-wide mb-6 leading-relaxed">
-              感知到您是初次來到浮生誌。若有歷史的記帳陣列 (JSON)，可貼入下方，系統將為您批次銘刻。
-              格式需包含: <code>{"amount, description, payment_method, type, created_at"}</code>。
-            </p>
-            <textarea 
-              className="w-full h-48 bg-[#f5f2ed]/50 border border-[#bccad6]/40 rounded-2xl p-4 text-xs font-mono text-[#4a4a4a] focus:outline-none focus:border-[#bccad6] mb-6 resize-none"
-              placeholder={'[\n  {\n    "amount": 150,\n    "description": "拿鐵",\n    "type": "expense",\n    "payment_method": "cash",\n    "created_at": "2026-06-15T08:30:00Z"\n  }\n]'}
-              value={importStr}
-              onChange={e => setImportStr(e.target.value)}
-            />
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setShowImportModal(false)}
-                className="px-6 py-2 rounded-full text-xs tracking-widest uppercase opacity-60 hover:opacity-100 transition-opacity"
-              >
-                略過 Skip
-              </button>
-              <button 
-                onClick={handleHistoricalImport}
-                disabled={!importStr || importing}
-                className="bg-[#4a4a4a] text-[#f5f2ed] px-8 py-2 rounded-full text-xs tracking-widest uppercase flex items-center gap-2 hover:bg-[#333] transition-colors disabled:opacity-50"
-              >
-                {importing && <Loader2 className="w-3 h-3 animate-spin"/>}
-                匯入 Import
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
