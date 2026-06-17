@@ -33,7 +33,13 @@ export function FluidSlider({ onRecord }: FluidSliderProps) {
     if (Math.abs(deltaY) > 0) {
       // faster drag = bigger increment
       const multiplier = Math.max(1, Math.abs(info.velocity.y) / 500);
-      const step = Math.abs(info.velocity.y) > 800 ? 100 : 10;
+      let step = 1;
+      if (Math.abs(info.velocity.y) > 800) step = 100;
+      else if (Math.abs(info.velocity.y) > 300) step = 10;
+      else if (amount >= 1000) step = 50;
+      else if (amount >= 100) step = 10;
+      else if (amount >= 50) step = 5;
+
       const increase = Math.sign(deltaY) * step * Math.ceil(multiplier);
       setAmount(prev => Math.max(0, prev + increase));
       
