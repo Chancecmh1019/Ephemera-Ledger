@@ -282,12 +282,6 @@ export function RecordList({ records, onUpdate, onDelete }: RecordListProps) {
                   <div className="absolute inset-y-0 right-12 w-12 bg-gradient-to-l from-white/90 to-transparent flex items-center justify-end pr-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                      <Pen className="w-4 h-4 text-[#4a4a4a]/50" />
                   </div>
-                </div>
-              </div>
-            );                    {/* Hover Edit Hint */}
-                    <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/90 to-transparent flex items-center justify-end pr-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 pointer-events-none">
-                       <Pen className="w-4 h-4 text-[#4a4a4a]/50" />
-                    </div>
                   </div>
                 </div>
               </div>
