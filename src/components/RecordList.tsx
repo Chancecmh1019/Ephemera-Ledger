@@ -217,7 +217,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
 
 function DateHeader({ date }: { date: string }) {
   return (
-    <div className="relative -left-2 md:-left-3 mt-6 mb-4 flex items-center gap-4 z-10 w-fit">
+    <div className="mt-6 mb-4 flex items-center gap-4 z-10 w-fit">
        <div className="bg-[#4a4a4a] text-[#f5f2ed] px-3 py-1 rounded text-[9px] uppercase tracking-widest font-sans font-medium shadow-md">
          {format(safeParseDate(date), 'MMM d', { locale: zhTW })}
        </div>
