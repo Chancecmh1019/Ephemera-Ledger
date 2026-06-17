@@ -16,6 +16,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
 
   // Edit State
   const [editDesc, setEditDesc] = useState('');
+  const [editNote, setEditNote] = useState('');
   const [editAmount, setEditAmount] = useState<number>(0);
   const [editDate, setEditDate] = useState('');
   const [editMethod, setEditMethod] = useState<'cash'|'credit_card'>('cash');
@@ -34,6 +35,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
     setEditId(r.id);
     // Remove default "未命名急件" placeholder when starting to edit
     setEditDesc(r.description === '未命名急件' ? '' : r.description);
+    setEditNote(r.note || '');
     setEditAmount(r.amount);
     setEditMethod(r.payment_method);
     setEditType(r.type);
@@ -52,6 +54,7 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
     const updated: RecordData = {
       ...r,
       description: editDesc,
+      note: editNote,
       amount: Number(editAmount),
       payment_method: editMethod,
       type: editType,
@@ -117,6 +120,18 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                        </div>
                     </div>
 
+                    {/* Note 欄位 */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] uppercase tracking-widest opacity-40">Note / 備註</label>
+                      <textarea 
+                        value={editNote} 
+                        onChange={e => setEditNote(e.target.value)} 
+                        className="text-xs border border-[#4a4a4a]/20 p-2.5 rounded-xl bg-transparent focus:outline-none focus:border-[#4a4a4a] transition-colors placeholder:opacity-30 resize-none"
+                        placeholder="額外備註資訊..."
+                        rows={2}
+                      />
+                    </div>
+
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-2">
                        <div className="flex gap-2">
                          <button onClick={() => setEditMethod('cash')} className={cn("px-4 py-1.5 rounded-full text-[9px] uppercase tracking-widest flex items-center gap-1 border transition-colors", editMethod === 'cash' ? "bg-[#bccad6] border-transparent text-[#4a4a4a]" : "bg-transparent border-[#4a4a4a]/20 opacity-50")}><Banknote className="w-3 h-3"/> Cash</button>
@@ -180,6 +195,13 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                     <h4 className={cn("font-serif text-sm md:text-base truncate", isUrgent ? "italic opacity-50" : "opacity-90")}>
                       {r.description}
                     </h4>
+                    
+                    {/* 顯示 note 如果有的話 */}
+                    {r.note && r.note.trim() !== '' && (
+                      <p className="text-[10px] opacity-50 text-[#4a4a4a] mt-0.5 line-clamp-1">
+                        {r.note}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="flex flex-col items-end gap-1 relative z-10">
