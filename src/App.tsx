@@ -104,7 +104,7 @@ function MainApp() {
     }
   }, [user, fetchRecords]);
 
-  const handleRecord = async (amount: number, paymentMethod: 'cash'|'credit_card', type: 'income'|'expense', description: string, customDate?: string) => {
+  const handleRecord = async (amount: number, paymentMethod: 'cash'|'credit_card', type: 'income'|'expense', description: string, note: string, customDate?: string) => {
     if (!user) return;
     
     setIsRefreshing(true);
@@ -115,7 +115,7 @@ function MainApp() {
       payment_method: paymentMethod,
       type,
       description,
-      note: '',
+      note: note || '',
       created_at: customDate || new Date().toISOString(),
       is_urgent: description === '未命名急件'
     };
