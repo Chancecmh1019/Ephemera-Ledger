@@ -11,47 +11,19 @@ interface WaterTankProps {
 
 export function WaterTank({ records, alertThreshold = 5000, isRefreshing = false }: WaterTankProps) {
   const cashBalance = useMemo(() => {
-    console.log('WaterTank: 計算現金餘額');
-    console.log('記錄總數:', records.length);
-    
     const cashRecords = records.filter((r) => r.payment_method === 'cash');
-    console.log('現金記錄數:', cashRecords.length);
     
     // 按照時間從舊到新排序（created_at 升序）
     const sortedRecords = [...cashRecords].sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
     
-    if (sortedRecords.length > 0) {
-      console.log('最早的記錄:', {
-        id: sortedRecords[0].id,
-        date: sortedRecords[0].created_at,
-        type: sortedRecords[0].type,
-        amount: sortedRecords[0].amount,
-        description: sortedRecords[0].description
-      });
-      console.log('最新的記錄:', {
-        id: sortedRecords[sortedRecords.length - 1].id,
-        date: sortedRecords[sortedRecords.length - 1].created_at,
-        type: sortedRecords[sortedRecords.length - 1].type,
-        amount: sortedRecords[sortedRecords.length - 1].amount,
-        description: sortedRecords[sortedRecords.length - 1].description
-      });
-    }
-    
-    const balance = sortedRecords.reduce((acc, r, index) => {
+    const balance = sortedRecords.reduce((acc, r) => {
       const amount = Number(r.amount);
-      const newAcc = r.type === 'income' ? acc + amount : acc - amount;
-      
-      // 只印出前5筆和後5筆
-      if (index < 5 || index >= sortedRecords.length - 5) {
-        console.log(`[${index}] ${r.type} ${amount}: ${acc} → ${newAcc}`);
-      }
-      
-      return newAcc;
+      // 收入增加餘額，支出減少餘額
+      return r.type === 'income' ? acc + amount : acc - amount;
     }, 0);
     
-    console.log('最終現金餘額:', balance);
     return balance;
   }, [records]);
 
