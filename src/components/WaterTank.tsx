@@ -12,18 +12,23 @@ interface WaterTankProps {
 export function WaterTank({ records, alertThreshold = 5000, isRefreshing = false }: WaterTankProps) {
   const cashBalance = useMemo(() => {
     console.log('WaterTank: 計算現金餘額');
-    console.log('所有記錄:', records);
+    console.log('記錄總數:', records.length);
     
     const cashRecords = records.filter((r) => r.payment_method === 'cash');
-    console.log('現金記錄:', cashRecords);
+    console.log('現金記錄數:', cashRecords.length);
     
-    const balance = cashRecords.reduce((acc, r) => {
+    // 按照時間從舊到新排序（created_at 升序）
+    const sortedRecords = [...cashRecords].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    
+    console.log('最早的記錄:', sortedRecords[0]);
+    console.log('最新的記錄:', sortedRecords[sortedRecords.length - 1]);
+    
+    const balance = sortedRecords.reduce((acc, r) => {
       const amount = Number(r.amount);
-      console.log(`處理記錄 ${r.id}: type=${r.type}, amount=${amount}, 當前累計=${acc}`);
-      
       // 收入增加餘額，支出減少餘額
       const newAcc = r.type === 'income' ? acc + amount : acc - amount;
-      console.log(`新累計: ${newAcc}`);
       return newAcc;
     }, 0);
     
