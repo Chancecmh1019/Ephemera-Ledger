@@ -160,23 +160,24 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
 
             return (
               <div key={r.id} className="relative w-full group">
-                {/* Timeline Dot - 放在日期標題之前，這樣點點會對應到帳目而非日期 */}
-                <div className={cn(
-                  "absolute -left-[9px] w-5 h-5 rounded-full border-[3px] border-[#f5f2ed] shadow-md z-10 transition-transform group-hover:scale-125",
-                  showDateHeader ? "top-[52px]" : "top-6",
-                  r.payment_method === 'cash' ? "bg-[#bccad6]" : "bg-[#d6adad]"
-                )}></div>
-                
                 {showDateHeader && <DateHeader date={r.created_at} />}
                 
-                {/* Card */}
-                <div 
-                  onClick={() => startEdit(r)}
-                  className={cn(
-                    "ml-6 p-4 rounded-2xl border transition-all duration-300 cursor-pointer flex justify-between items-center relative overflow-hidden active:scale-[0.98]",
-                    isUrgent ? "bg-white border-[#d6adad] shadow-[0_4px_20px_rgba(214,173,173,0.15)]" : "bg-white/40 border-white/80 hover:bg-white/80 hover:shadow-md"
-                  )}
-                >
+                {/* Card Container with centered timeline dot */}
+                <div className="relative">
+                  {/* Timeline Dot - 置中對齊帳單卡片 */}
+                  <div className={cn(
+                    "absolute -left-[9px] top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-[3px] border-[#f5f2ed] shadow-md z-10 transition-transform group-hover:scale-125",
+                    r.payment_method === 'cash' ? "bg-[#bccad6]" : "bg-[#d6adad]"
+                  )}></div>
+                  
+                  {/* Card */}
+                  <div 
+                    onClick={() => startEdit(r)}
+                    className={cn(
+                      "ml-6 p-4 rounded-2xl border transition-all duration-300 cursor-pointer flex justify-between items-center relative overflow-hidden active:scale-[0.98]",
+                      isUrgent ? "bg-white border-[#d6adad] shadow-[0_4px_20px_rgba(214,173,173,0.15)]" : "bg-white/40 border-white/80 hover:bg-white/80 hover:shadow-md"
+                    )}
+                  >
                   {isUrgent && (
                     <div className="absolute top-0 right-0 w-16 h-16 bg-[#d6adad]/10 rounded-bl-full pointer-events-none" />
                   )}
@@ -217,9 +218,10 @@ export function RecordList({ records, onUpdate }: RecordListProps) {
                      </span>
                   </div>
 
-                  {/* Hover Edit Hint */}
-                  <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/90 to-transparent flex items-center justify-end pr-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 pointer-events-none">
-                     <Pen className="w-4 h-4 text-[#4a4a4a]/50" />
+                    {/* Hover Edit Hint */}
+                    <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/90 to-transparent flex items-center justify-end pr-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 pointer-events-none">
+                       <Pen className="w-4 h-4 text-[#4a4a4a]/50" />
+                    </div>
                   </div>
                 </div>
               </div>
