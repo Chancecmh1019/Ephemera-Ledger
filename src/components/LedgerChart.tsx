@@ -30,7 +30,7 @@ export function LedgerChart({ records }: { records: RecordData[] }) {
   }, [records]);
 
   return (
-    <div className="w-full flex-none h-[280px] lg:h-[320px] bg-white/40 backdrop-blur-md rounded-[32px] p-6 lg:p-8 flex flex-col border border-white/60 shadow-sm">
+    <div className="w-full flex-1 min-h-[300px] h-full bg-white/40 backdrop-blur-md rounded-[32px] p-6 lg:p-8 flex flex-col border border-white/60 shadow-sm">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-[10px] font-medium tracking-[0.2em] uppercase opacity-50 text-[#4a4a4a]">歲月流線 · Trend</h3>
         <div className="flex gap-4 text-[9px] uppercase tracking-widest font-sans opacity-70">
