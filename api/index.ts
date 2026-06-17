@@ -35,6 +35,41 @@ if (!supabase) {
   console.log('✅ Supabase 客戶端已初始化');
 }
 
+app.get("/api/health", async (req, res) => {
+  try {
+    const health: any = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      supabase: {
+        configured: !!supabase,
+        url: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'not set',
+        hasKey: !!supabaseKey,
+        connection: 'not tested',
+        testQuery: 'not tested'
+      },
+      env: {
+        nodeEnv: process.env.NODE_ENV,
+        isVercel: !!process.env.VERCEL
+      }
+    };
+
+    // 測試 Supabase 連線
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('records').select('count').limit(1);
+        health.supabase.connection = error ? `error: ${error.message}` : 'ok';
+        health.supabase.testQuery = error ? 'failed' : 'success';
+      } catch (e: any) {
+        health.supabase.connection = `exception: ${e.message}`;
+      }
+    }
+
+    res.json(health);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/records", async (req, res) => {
   try {
     const { user_id } = req.query;
@@ -181,6 +216,12 @@ app.post("/api/auth/init-history", async (req, res) => {
     }
 
     console.log(`🔄 開始匯入歷史資料: 使用者 ${user_id}, 共 ${records.length} 筆記錄`);
+    console.log(`📊 Supabase 狀態: ${supabase ? '已連接' : '未連接'}`);
+    console.log(`🔑 環境變數檢查:`, {
+      hasUrl: !!process.env.SUPABASE_URL,
+      hasKey: !!process.env.SUPABASE_KEY,
+      url: process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.substring(0, 20)}...` : '未設定'
+    });
 
     const processedRecords: RecordData[] = records.map(r => ({
       id: r.id || crypto.randomUUID(),
