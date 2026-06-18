@@ -12,20 +12,21 @@ export function BalanceRings({ records }: { records: RecordData[] }) {
     records.forEach(r => {
       if (r.type === 'income') income += r.amount;
       else if (r.payment_method === 'cash') expenseCash += r.amount;
-      else expenseCredit += r.amount;
+      else if (r.payment_method === 'credit_card') expenseCredit += r.amount;
     });
     
     const cashRemaining = Math.max(income - expenseCash, 0);
     return [
-      { name: '現金餘額', value: cashRemaining, color: '#bccad6' }, // Blue
-      { name: '現金支出', value: expenseCash, color: 'rgba(188, 202, 214, 0.2)' },
-      { name: '信用支出', value: expenseCredit, color: '#d6adad' }, // Pink
-      { name: '未用信用', value: Math.max(20000 - expenseCredit, 0), color: 'rgba(214, 173, 173, 0.2)' } // Dummy credit limit
+      { name: '現金餘額', value: cashRemaining, color: '#bccad6' }, // Blue - index 0
+      { name: '現金支出', value: expenseCash, color: 'rgba(188, 202, 214, 0.2)' }, // index 1
+      { name: '信用支出', value: expenseCredit, color: '#d6adad' }, // Pink - index 2
+      { name: '未用信用', value: Math.max(20000 - expenseCredit, 0), color: 'rgba(214, 173, 173, 0.2)' } // index 3
     ];
   }, [records]);
 
-  // Separate into two rings for display
+  // Cash ring: 現金餘額 + 現金支出
   const cashData = [data[0], data[1]];
+  // Credit ring: 信用支出 + 未用信用
   const creditData = [data[2], data[3]];
 
   return (
